@@ -15,6 +15,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <!-- AutoTable for multi-page PDF (#12) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<!-- Supabase Auth (Phase 1 login) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 /* ── THEME TOKENS: Light & Dark (#2) ── */
@@ -231,6 +233,33 @@ tfoot td{padding:8px 13px;font-weight:700;font-size:12px;background:var(--surfac
 </style>
 </head>
 <body>
+<!-- ══════════ AUTH GUARD (Phase 1) — must run before anything renders ══════════ -->
+<script>
+(function(){
+  const SUPABASE_URL = 'https://gjdolrzevbnvgmilakqv.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_deU76u9KVnUMeCZLTgvgbg_iAlXC2NX';
+
+  window.__supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  document.documentElement.style.visibility = 'hidden';
+
+  window.__supabase.auth.getSession().then(({ data: { session } }) => {
+    if (!session) {
+      window.location.href = 'login.html';
+      return;
+    }
+    window.__currentUser = session.user;
+    document.documentElement.style.visibility = 'visible';
+  });
+
+  window.__supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_OUT' || !session) {
+      window.location.href = 'login.html';
+    }
+  });
+})();
+</script>
+<!-- ══════════ END AUTH GUARD ══════════ -->
 <div id="libErr" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#dc2626;color:#fff;padding:9px;text-align:center;font-size:12px;font-weight:600">⚠️ Excel library failed to load. Check your connection and press Ctrl+F5.</div>
 
 <!-- TOPBAR -->
@@ -242,6 +271,11 @@ tfoot td{padding:8px 13px;font-weight:700;font-size:12px;background:var(--surfac
   <div class="topbar-right">
     <div id="dataStatus">No data loaded</div>
     <div class="live-clock" id="liveClock"></div>
+    <!-- User info + Logout (Phase 1) -->
+    <div id="userInfoBox" style="display:flex;align-items:center;gap:8px;font-size:11px;background:rgba(255,255,255,.1);padding:3px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.15)">
+      <span id="userEmailDisplay">—</span>
+      <button id="logoutBtn" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:#fff;padding:3px 9px;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit">Logout</button>
+    </div>
     <!-- Dark/Light Mode Toggle (#2) -->
     <div class="dm-toggle" onclick="toggleDarkMode()" title="Toggle dark/light mode">
       <div class="dm-track"><div class="dm-thumb" id="dmThumb">☀️</div></div>
@@ -1971,5 +2005,20 @@ document.querySelectorAll('.navtab').forEach(tab=>{
 });
 
 </script>
+<!-- ══════════ USER BAR WIRING (Phase 1) ══════════ -->
+<script>
+(function(){
+  function initUserBar(){
+    if (!window.__currentUser) { setTimeout(initUserBar, 100); return; }
+    document.getElementById('userEmailDisplay').textContent = window.__currentUser.email;
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      await window.__supabase.auth.signOut();
+      window.location.href = 'login.html';
+    });
+  }
+  initUserBar();
+})();
+</script>
+<!-- ══════════ END USER BAR WIRING ══════════ -->
 </body>
 </html>
