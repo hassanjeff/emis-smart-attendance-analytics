@@ -1,0 +1,1975 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EMIS SEDGB | Analytics Dashboard v6</title>
+<!-- SheetJS: primary jsdelivr + cloudflare fallback (fixes CDN reliability) -->
+<script>(function(){function L(s,f){var e=document.createElement('script');e.src=s;e.onerror=function(){if(f)L(f,null);else document.getElementById('libErr').style.display='block';};document.head.appendChild(e);}L('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js','https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');})();</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<!-- ChartDataLabels for bar value labels (#8) -->
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<!-- D3.js for geographic map (#11) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- AutoTable for multi-page PDF (#12) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* ── THEME TOKENS: Light & Dark (#2) ── */
+[data-theme="light"]{
+  --bg:#eef2f7;--surface:#fff;--surface-2:#f8fafc;--surface-3:#f1f5f9;
+  --border:#e2e8f0;--text-1:#0f172a;--text-2:#475569;--text-3:#94a3b8;
+  --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.05);
+  --cg:#f1f5f9;--ct:#475569;
+  --primary:#1a56db;--primary-dark:#1e40af;--primary-light:#dbeafe;
+  --accent:#059669;--accent-light:#d1fae5;
+  --warning:#d97706;--warning-light:#fef3c7;
+  --danger:#dc2626;--danger-light:#fee2e2;
+}
+[data-theme="dark"]{
+  --bg:#0f172a;--surface:#1e293b;--surface-2:#263347;--surface-3:#2d3f55;
+  --border:#334155;--text-1:#f1f5f9;--text-2:#94a3b8;--text-3:#64748b;
+  --shadow:0 1px 3px rgba(0,0,0,.4),0 1px 2px rgba(0,0,0,.3);
+  --cg:#263347;--ct:#94a3b8;
+  --primary:#1a56db;--primary-dark:#1e40af;--primary-light:#1e3a5f;
+  --accent:#059669;--accent-light:#064e3b;
+  --warning:#d97706;--warning-light:#451a03;
+  --danger:#dc2626;--danger-light:#450a0a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--text-1);min-height:100vh;font-size:14px;transition:background .25s,color .25s}
+button{cursor:pointer;font-family:inherit;border:none;outline:none}
+/* Error banner */
+#libErr{display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#dc2626;color:#fff;padding:9px;text-align:center;font-size:12px;font-weight:600}
+/* Dark mode toggle (#2) */
+.dm-toggle{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none}
+.dm-track{width:40px;height:22px;background:rgba(255,255,255,.2);border-radius:11px;position:relative;transition:.25s;flex-shrink:0;border:1px solid rgba(255,255,255,.25)}
+.dm-thumb{position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.25s;font-size:9px;display:flex;align-items:center;justify-content:center;line-height:1}
+[data-theme="dark"] .dm-thumb{left:21px}
+.dm-label{font-size:11px;color:rgba(255,255,255,.75)}
+/* Topbar */
+.topbar{background:linear-gradient(135deg,#1e3a5f 0%,#1a56db 100%);color:#fff;padding:0 22px;display:flex;align-items:center;justify-content:space-between;height:60px;position:sticky;top:0;z-index:200;box-shadow:0 2px 16px rgba(0,0,0,.3)}
+[data-theme="dark"] .topbar{background:linear-gradient(135deg,#080d1a 0%,#1e3a5f 100%)}
+.topbar-brand{display:flex;align-items:center;gap:12px}
+.topbar-logo{width:36px;height:36px;background:rgba(255,255,255,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;border:1px solid rgba(255,255,255,.2);text-align:center;line-height:1.3;flex-shrink:0}
+.topbar-title{font-size:17px;font-weight:700;letter-spacing:-.3px}
+.topbar-sub{font-size:10px;opacity:.7;margin-top:1px}
+.topbar-right{display:flex;align-items:center;gap:10px;font-size:12px}
+.live-clock{font-family:'IBM Plex Mono',monospace;font-size:11px;background:rgba(255,255,255,.1);padding:3px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.15)}
+#dataStatus{font-size:11px;background:rgba(255,255,255,.1);padding:3px 10px;border-radius:6px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Navtabs */
+.navtabs{background:var(--surface);border-bottom:2px solid var(--border);padding:0 22px;display:flex;gap:2px;overflow-x:auto;position:sticky;top:60px;z-index:100;box-shadow:var(--shadow)}
+.navtab{padding:13px 16px;font-size:12px;font-weight:500;color:var(--text-2);border:none;background:transparent;cursor:pointer;border-bottom:3px solid transparent;transition:.18s;white-space:nowrap;display:flex;align-items:center;gap:5px}
+.navtab:hover{color:var(--primary)}
+.navtab.active{color:var(--primary);border-bottom-color:var(--primary);font-weight:700}
+/* Category toggle (#9) */
+.cat-toggle{display:flex;gap:3px;background:var(--surface-3);padding:3px;border-radius:8px;border:1.5px solid var(--border);flex-wrap:wrap}
+.cat-btn{padding:5px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--text-2);transition:.18s;white-space:nowrap}
+.cat-btn.active{background:var(--primary);color:#fff}
+/* Main */
+.main{max-width:1600px;margin:0 auto;padding:18px 20px}
+.tab-panel{display:none}.tab-panel.active{display:block}
+/* Upload */
+.upload-panel{background:var(--surface);border-radius:12px;border:2px dashed var(--border);padding:30px;text-align:center;margin-bottom:18px;transition:.2s}
+.upload-panel:hover,.upload-panel.dragover{border-color:var(--primary);background:rgba(26,86,219,.04)}
+.upload-icon{font-size:32px;display:block;margin-bottom:9px}
+.upload-panel h3{font-size:15px;font-weight:600;margin-bottom:5px;color:var(--text-1)}
+.upload-panel p{color:var(--text-2);font-size:12px;margin-bottom:13px}
+.file-btn{display:inline-flex;align-items:center;gap:7px;background:var(--primary);color:#fff;padding:9px 18px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:.2s;border:none}
+.file-btn:hover{background:var(--primary-dark)}.file-btn.compact{padding:6px 13px;font-size:11px}
+#uploadStatusRow{display:none;background:var(--surface);border:1.5px solid var(--accent);border-radius:10px;padding:11px 18px;margin-bottom:18px;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:9px;box-shadow:var(--shadow)}
+#uploadStatusText{font-size:12px;color:var(--accent);font-weight:600}
+#uploadSpinner{display:none;width:16px;height:16px;border:2.5px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* Filter bar */
+.filter-bar{background:var(--surface);border-radius:10px;padding:13px 18px;margin-bottom:18px;display:flex;flex-wrap:wrap;gap:11px;align-items:flex-end;box-shadow:var(--shadow)}
+.fg{display:flex;flex-direction:column;gap:3px}
+.fg label{font-size:10px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px}
+.fg select,.fg input{border:1.5px solid var(--border);border-radius:7px;padding:6px 9px;font-size:12px;font-family:inherit;color:var(--text-1);background:var(--surface-2);outline:none;min-width:110px;transition:.15s}
+.fg select:focus,.fg input:focus{border-color:var(--primary)}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:7px;font-size:12px;font-weight:600;transition:.18s;cursor:pointer;border:none}
+.btn-primary{background:var(--primary);color:#fff}.btn-primary:hover{background:var(--primary-dark)}
+.btn-ghost{background:var(--surface-3);color:var(--text-1);border:1.5px solid var(--border)}.btn-ghost:hover{background:var(--border)}
+.btn-sm{padding:4px 10px;font-size:11px}
+/* KPI */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px}
+.kpi-card{background:var(--surface);border-radius:11px;padding:15px 17px;box-shadow:var(--shadow);cursor:pointer;transition:.18s;position:relative;overflow:hidden;border:1.5px solid transparent}
+.kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:11px 11px 0 0}
+.kpi-card.blue::before{background:linear-gradient(90deg,#1a56db,#60a5fa)}.kpi-card.green::before{background:linear-gradient(90deg,#059669,#34d399)}
+.kpi-card.orange::before{background:linear-gradient(90deg,#d97706,#fbbf24)}.kpi-card.red::before{background:linear-gradient(90deg,#dc2626,#f87171)}
+.kpi-card.purple::before{background:linear-gradient(90deg,#7c3aed,#a78bfa)}.kpi-card.teal::before{background:linear-gradient(90deg,#0891b2,#22d3ee)}
+.kpi-card:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.12);border-color:rgba(26,86,219,.2)}
+.kpi-label{font-size:10px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px}
+.kpi-value{font-size:24px;font-weight:700;color:var(--text-1);line-height:1;font-family:'IBM Plex Mono',monospace;letter-spacing:-1px}
+.kpi-sub{font-size:10px;color:var(--text-3);margin-top:4px}
+/* Section title */
+.section-title{font-size:11px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.8px;margin:18px 0 11px;display:flex;align-items:center;gap:8px}
+.section-title::after{content:'';flex:1;height:1px;background:var(--border)}
+/* Charts */
+.chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:15px;margin-bottom:18px}
+.chart-card{background:var(--surface);border-radius:11px;padding:18px;box-shadow:var(--shadow)}
+.chart-card.wide{grid-column:1/-1}
+.chart-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;gap:8px}
+.chart-title{font-size:13px;font-weight:700;color:var(--text-1)}.chart-sub{font-size:11px;color:var(--text-2);margin-top:2px}
+.chart-actions{display:flex;gap:5px;flex-shrink:0}
+.chart-btn{padding:4px 9px;font-size:11px;border-radius:5px;background:var(--surface-3);border:1.5px solid var(--border);color:var(--text-2);cursor:pointer}
+.chart-btn:hover{background:var(--border)}
+.chart-wrap{position:relative;height:230px}.chart-wrap.tall{height:290px}.chart-wrap.xtall{height:360px}
+/* Tables */
+.table-card{background:var(--surface);border-radius:11px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:18px}
+.table-header{padding:13px 17px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:9px;border-bottom:2px solid var(--border)}
+.table-title{font-size:13px;font-weight:700;color:var(--text-1)}
+.table-controls{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.search-box{border:1.5px solid var(--border);border-radius:7px;padding:5px 10px;font-size:12px;font-family:inherit;outline:none;background:var(--surface-2);min-width:165px;color:var(--text-1)}
+.search-box:focus{border-color:var(--primary)}
+.table-wrap{overflow-x:auto;max-height:470px;overflow-y:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead{position:sticky;top:0;z-index:10}
+thead th{background:#1e3a5f;color:#fff;padding:9px 13px;text-align:left;font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;cursor:pointer;user-select:none}
+thead th.sort-asc::after{content:" ▲";font-size:8px;opacity:.85}
+thead th.sort-desc::after{content:" ▼";font-size:8px;opacity:.85}
+[data-theme="dark"] thead th{background:#080d1a}
+thead th:hover{background:#2d4f7a}
+tbody tr{border-bottom:1px solid var(--border);transition:.1s}
+tbody tr:hover{background:rgba(26,86,219,.07);cursor:pointer}
+tbody td{padding:8px 13px;color:var(--text-1)}
+tfoot td{padding:8px 13px;font-weight:700;font-size:12px;background:var(--surface-3);border-top:2px solid var(--border);color:var(--text-1)}
+.pagination{display:flex;gap:4px;align-items:center;padding:10px 16px;justify-content:flex-end;border-top:1px solid var(--border);flex-wrap:wrap}
+.page-btn{min-width:27px;height:27px;border-radius:6px;font-size:11px;font-weight:600;background:var(--surface-3);border:1.5px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0 6px;transition:.12s;color:var(--text-1)}
+.page-btn:hover,.page-btn.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.page-info{font-size:11px;color:var(--text-2);margin-right:5px}
+/* Badges */
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:11px;font-size:10px;font-weight:700}
+.b-green{background:#d1fae5;color:#065f46}.b-blue{background:#dbeafe;color:#1e40af}
+.b-orange{background:#fef3c7;color:#92400e}.b-red{background:#fee2e2;color:#991b1b}
+.b-purple{background:#ede9fe;color:#5b21b6}.b-gray{background:var(--surface-3);color:var(--text-2)}
+.pct-bar{display:flex;align-items:center;gap:6px}
+.pct-track{flex:1;height:5px;background:var(--surface-3);border-radius:3px;overflow:hidden;min-width:50px}
+.pct-fill{height:100%;border-radius:3px}
+.tl{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700}
+.tl-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+/* Modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(4px);z-index:500;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal-box{background:var(--surface);border-radius:14px;width:94%;max-width:1060px;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.3)}
+.modal-head{padding:14px 20px;display:flex;align-items:center;gap:10px;background:linear-gradient(135deg,#1e3a5f,#1a56db);color:#fff;flex-shrink:0}
+.modal-head h3{font-size:14px;font-weight:700;flex:1}
+.modal-export-btns{display:flex;gap:5px}
+.modal-close{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);color:#fff;width:28px;height:28px;border-radius:5px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.modal-body{padding:18px 20px;overflow-y:auto;flex:1}
+/* Summary banner */
+.summary-banner{background:linear-gradient(135deg,#1e3a5f 0%,#1a56db 60%,#0891b2 100%);color:#fff;border-radius:11px;padding:16px 20px;margin-bottom:18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:14px}
+.banner-stat{text-align:center}
+.banner-val{font-size:22px;font-weight:700;font-family:'IBM Plex Mono',monospace;letter-spacing:-1px}
+.banner-label{font-size:9px;opacity:.75;text-transform:uppercase;letter-spacing:.5px;margin-top:3px;font-weight:600}
+/* Trend */
+.trend-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:11px;margin-top:11px}
+.trend-stat{background:var(--surface-2);border-radius:8px;padding:13px;border:1.5px solid var(--border);text-align:center}
+.trend-stat-val{font-size:19px;font-weight:700;font-family:'IBM Plex Mono',monospace;color:var(--primary)}
+.trend-stat-label{font-size:9px;color:var(--text-2);margin-top:3px;font-weight:700;text-transform:uppercase}
+/* Explorer */
+.explorer-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(235px,1fr));gap:11px;margin-top:11px}
+.explorer-card{background:var(--surface);border-radius:9px;padding:13px 15px;border:1.5px solid var(--border);transition:.18s;cursor:pointer;box-shadow:0 4px 6px rgba(0,0,0,.12),0 1px 3px rgba(0,0,0,.08),inset 0 1px 0 rgba(255,255,255,.6)}
+.explorer-card:hover{border-color:var(--primary);transform:translateY(-4px);box-shadow:0 8px 20px rgba(0,0,0,.18),0 2px 6px rgba(0,0,0,.1),inset 0 1px 0 rgba(255,255,255,.6)}
+.explorer-name{font-size:11px;font-weight:700;color:var(--text-1);margin-bottom:5px;line-height:1.35}
+.explorer-meta{display:flex;gap:7px;font-size:10px;color:var(--text-2);flex-wrap:wrap}
+.explorer-bar{margin-top:6px;height:4px;background:var(--surface-3);border-radius:2px;overflow:hidden}
+/* Heatmap sub-tabs */
+.sub-tabs{display:flex;gap:4px;margin-bottom:13px}
+.sub-tab{padding:6px 15px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:var(--surface-2);color:var(--text-2);transition:.15s}
+.sub-tab.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+/* Geo map (#11) */
+#geoMap path,#miniGeoMap path{cursor:pointer;stroke:#000;stroke-width:1.5;transition:opacity .15s,stroke-width .12s}
+[data-theme="dark"] #geoMap path,[data-theme="dark"] #miniGeoMap path{stroke:#000}
+#geoMap path:hover,#miniGeoMap path:hover{opacity:.8;stroke-width:3px}
+.map-tooltip{position:fixed;background:rgba(15,23,42,.93);color:#fff;padding:10px 14px;border-radius:8px;font-size:11px;pointer-events:none;opacity:0;transition:opacity .12s;max-width:210px;z-index:400;line-height:1.7;white-space:pre-line;box-shadow:0 4px 14px rgba(0,0,0,.3)}
+.map-legend{display:flex;align-items:center;gap:9px;margin-top:9px;font-size:10px;color:var(--text-2)}
+/* Heatmap grid */
+.hm-table{border-collapse:collapse;font-size:11px;min-width:300px}
+.hm-table th{padding:7px 11px;font-size:9px;font-weight:700;text-transform:uppercase;background:#1e3a5f;color:#fff;white-space:nowrap}
+[data-theme="dark"] .hm-table th{background:#080d1a}
+.hm-table td{padding:7px 11px;text-align:center;font-weight:700;border:1px solid rgba(255,255,255,.35);cursor:pointer;transition:.12s;white-space:nowrap}
+.hm-table td:hover{opacity:.75;outline:2px solid rgba(255,255,255,.7)}
+/* District row hover */
+.dist-row:hover{background:rgba(26,86,219,.08)!important}
+/* Report sections */
+.report-section{background:var(--surface);border-radius:11px;box-shadow:var(--shadow);margin-bottom:18px;overflow:hidden}
+.report-section-head{background:linear-gradient(90deg,#1e3a5f,#1a56db);color:#fff;padding:12px 17px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.report-section-head h3{font-size:13px;font-weight:700}
+.report-section-body{padding:14px 17px}
+.report-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:13px}
+.rg{display:flex;flex-direction:column;gap:3px}
+.rg label{font-size:10px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.4px}
+.rg select{border:1.5px solid var(--border);border-radius:6px;padding:5px 9px;font-size:12px;font-family:inherit;background:var(--surface-2);outline:none;min-width:120px;color:var(--text-1)}
+.exp-btns{display:flex;gap:5px;flex-wrap:wrap}
+.exp-btn{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;border:none;transition:.18s}
+.exp-jpg{background:#7c3aed;color:#fff}.exp-jpg:hover{background:#6d28d9}
+.exp-pdf{background:#dc2626;color:#fff}.exp-pdf:hover{background:#b91c1c}
+.exp-csv{background:#059669;color:#fff}.exp-csv:hover{background:#047857}
+.exp-xl{background:#1a56db;color:#fff}.exp-xl:hover{background:#1e40af}
+.exp-svg{background:#0891b2;color:#fff}.exp-svg:hover{background:#0e7490}
+/* Letterhead */
+.letterhead{background:var(--surface);border:1.5px solid var(--border);border-radius:10px;overflow:hidden;margin-top:9px}
+.lh-header{background:linear-gradient(135deg,#1e3a5f,#1a56db);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:14px}
+.lh-emblem{width:50px;height:50px;background:rgba(255,255,255,.15);border-radius:50%;border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:20px}
+.lh-title h2{font-size:14px;font-weight:700}.lh-title p{font-size:10px;opacity:.8;margin-top:2px}
+.lh-meta{background:var(--surface-2);border-bottom:2px solid var(--border);padding:9px 20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:5px;font-size:11px}
+.lh-meta-key{font-weight:700;color:var(--text-2);min-width:110px;display:inline-block}
+.lh-meta-val{color:var(--text-1)}
+.lh-footer{background:#1e3a5f;color:rgba(255,255,255,.7);padding:6px 20px;font-size:10px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px}
+/* Empty state */
+.empty-state{text-align:center;padding:50px 20px;color:var(--text-2)}
+.empty-state .eicon{font-size:42px;display:block;margin-bottom:12px;opacity:.4}
+.empty-state h3{font-size:15px;font-weight:600;margin-bottom:5px;color:var(--text-1)}
+.empty-state p{font-size:12px}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.fade-in{animation:fadeUp .28s ease both}
+@media(max-width:768px){.chart-grid{grid-template-columns:1fr}.kpi-grid{grid-template-columns:repeat(2,1fr)}.main{padding:11px}.topbar-sub,#dataStatus{display:none}}
+@media(max-width:480px){.kpi-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div id="libErr" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#dc2626;color:#fff;padding:9px;text-align:center;font-size:12px;font-weight:600">⚠️ Excel library failed to load. Check your connection and press Ctrl+F5.</div>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="topbar-logo">EMIS<br>SEDGB</div>
+    <div><div class="topbar-title">EMIS SEDGB</div><div class="topbar-sub">School Education Department — Gilgit-Baltistan</div></div>
+  </div>
+  <div class="topbar-right">
+    <div id="dataStatus">No data loaded</div>
+    <div class="live-clock" id="liveClock"></div>
+    <!-- Dark/Light Mode Toggle (#2) -->
+    <div class="dm-toggle" onclick="toggleDarkMode()" title="Toggle dark/light mode">
+      <div class="dm-track"><div class="dm-thumb" id="dmThumb">☀️</div></div>
+      <span class="dm-label" id="dmLabel">Light</span>
+    </div>
+  </div>
+</div>
+
+<!-- NAVTABS -->
+<div class="navtabs">
+  <button class="navtab active" data-tab="overview">📊 Overview</button>
+  <button class="navtab" data-tab="districts">🗺️ Districts</button>
+  <button class="navtab" data-tab="explorer">🔍 DDO Explorer</button>
+  <button class="navtab" data-tab="trends">📈 Trends</button>
+  <button class="navtab" data-tab="heatmap">🌡️ Heatmap</button>
+  <button class="navtab" data-tab="reports">📋 Reports</button>
+</div>
+
+<div class="main">
+
+<!-- UPLOAD (permanent, never rebuilt) -->
+<div class="upload-panel" id="uploadPanel" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleDrop(event)">
+  <span class="upload-icon">📂</span>
+  <h3>Upload Excel Workbook</h3>
+  <p>Name each sheet with a date: <strong>16-04-2026</strong>. Multiple sheets enable trend analysis.</p>
+  <label class="file-btn" for="excelUpload">
+    <span id="uploadBtnIcon">📎</span><span id="uploadBtnText">Choose Excel File (.xlsx)</span>
+    <div id="uploadSpinner"></div>
+  </label>
+</div>
+<input type="file" id="excelUpload" accept=".xlsx,.xls" style="display:none">
+<!-- Status row lives outside upload panel so panel never needs innerHTML rebuild -->
+<div id="uploadStatusRow">
+  <div id="uploadStatusText"></div>
+  <label class="file-btn compact" for="excelUpload">📎 Change File</label>
+</div>
+
+<!-- FILTER BAR -->
+<div class="filter-bar" id="filterBar" style="display:none">
+  <!-- Category Toggle (#9) -->
+  <div class="fg">
+    <label>📂 Category</label>
+    <div class="cat-toggle">
+      <button class="cat-btn active" data-cat="all" onclick="setCategory('all')">All</button>
+      <button class="cat-btn" data-cat="school" onclick="setCategory('school')">Schools</button>
+      <button class="cat-btn" data-cat="office" onclick="setCategory('office')">Offices</button>
+      <button class="cat-btn" data-cat="college" onclick="setCategory('college')">Colleges of Education</button>
+    </div>
+  </div>
+  <div class="fg"><label>📅 Date</label><select id="dateSelect"><option value="all">All Dates</option></select></div>
+  <div class="fg"><label>📅 From</label><select id="dateFrom"><option value="">-- Start --</option></select></div>
+  <div class="fg"><label>📅 To</label><select id="dateTo"><option value="">-- End --</option></select></div>
+  <div class="fg"><label>🗺️ District</label><select id="districtFilter"><option value="all">All Districts</option></select></div>
+  <div class="fg"><label>🔍 Search</label><input type="text" id="globalSearch" placeholder="DDO name..." oninput="debounceFilter()"></div>
+  <div style="display:flex;gap:7px;align-self:flex-end">
+    <button class="btn btn-primary" onclick="applyFilters()">Apply</button>
+    <button class="btn btn-ghost" onclick="resetFilters()">Reset</button>
+  </div>
+</div>
+
+<!-- TAB: OVERVIEW -->
+<div class="tab-panel active" id="tab-overview">
+  <div id="ovEmpty" class="empty-state"><span class="eicon">📊</span><h3>No Data Loaded</h3><p>Upload an Excel workbook above to begin.</p></div>
+  <div id="ovContent" style="display:none">
+    <div class="summary-banner fade-in">
+      <div class="banner-stat"><div class="banner-val" id="b-inst">—</div><div class="banner-label">DDO Count</div></div>
+      <div class="banner-stat"><div class="banner-val" id="b-emp">—</div><div class="banner-label">Total Employees</div></div>
+      <div class="banner-stat"><div class="banner-val" id="b-schools">—</div><div class="banner-label">Total Schools</div></div>
+      <div class="banner-stat"><div class="banner-val" id="b-offices">—</div><div class="banner-label">Total Offices</div></div>
+      <div class="banner-stat"><div class="banner-val" id="b-colleges">—</div><div class="banner-label">Colleges of Education</div></div>
+    </div>
+    <div class="section-title">Key Performance Indicators</div>
+    <div class="kpi-grid" id="kpiGrid"></div>
+    <div class="section-title">Visualizations</div>
+    <div class="chart-grid">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">District Attendance Rate</div><div class="chart-sub">Click bar → drill down · Values on bars</div></div>
+          <div class="chart-actions">
+            <button class="chart-btn" onclick="exportChartPNG('chartDistrict','District_Attendance')">PNG</button>
+            <button class="chart-btn" onclick="exportChartSVG('chartDistrict','District_Attendance')">SVG</button>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="chartDistrict"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">Status Distribution</div><div class="chart-sub">Present · Absent · Leave (Holiday excluded)</div></div>
+          <div class="chart-actions"><button class="chart-btn" onclick="exportChartPNG('chartDonut','Status_Distribution')">PNG</button></div>
+        </div>
+        <div class="chart-wrap"><canvas id="chartDonut"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-grid">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">Total Employees by District</div><div class="chart-sub">Employee count at bar tip (#1 replaces Top 15)</div></div>
+          <div class="chart-actions">
+            <button class="chart-btn" onclick="exportChartPNG('chartEmpBar','Employees_District')">PNG</button>
+            <button class="chart-btn" onclick="exportChartSVG('chartEmpBar','Employees_District')">SVG</button>
+          </div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="chartEmpBar"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">Employee Share by District</div></div>
+          <div class="chart-actions"><button class="chart-btn" onclick="exportChartPNG('chartEmpPie','Emp_Pie')">PNG</button></div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="chartEmpPie"></canvas></div>
+      </div>
+    </div>
+    <div class="section-title">DDO Attendance Detail</div>
+    <div class="table-card">
+      <div class="table-header">
+        <div class="table-title">All DDOs</div>
+        <div class="table-controls">
+          <input class="search-box" id="tableSearch" placeholder="🔍 Filter DDOs..." oninput="filterMainTable()">
+          <select id="tablePageSize" onchange="changePageSize()" style="border:1.5px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;font-family:inherit;background:var(--surface-2);color:var(--text-1)">
+            <option value="25">25/page</option><option value="50">50/page</option><option value="100">100/page</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap"><table id="mainTable"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
+      <div class="pagination" id="mainPagination"></div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: DISTRICTS -->
+<div class="tab-panel" id="tab-districts">
+  <div id="distEmpty" class="empty-state"><span class="eicon">🗺️</span><h3>No Data</h3><p>Upload data first.</p></div>
+  <div id="distContent" style="display:none">
+    <!-- Mini geographic map in Districts tab (#11) -->
+    <div class="chart-card" style="margin-bottom:16px">
+      <div class="chart-header">
+        <div><div class="chart-title">GB District Attendance Map</div><div class="chart-sub">Hover for details · Click to drill down</div></div>
+        <div class="chart-actions">
+          <select id="miniMapMetric" onchange="renderMiniMap()" style="border:1.5px solid var(--border);border-radius:5px;padding:3px 7px;font-size:11px;font-family:inherit;background:var(--surface-2);color:var(--text-1)">
+            <option value="pct">Attendance %</option>
+            <option value="absent">Absent Count</option>
+            <option value="present">Present Count</option>
+          </select>
+        </div>
+      </div>
+      <div style="position:relative;background:var(--surface-2);border-radius:9px;border:1.5px solid var(--border);overflow:visible;height:300px">
+        <svg id="miniGeoMap" style="width:100%;height:100%"></svg>
+        <div class="map-tooltip" id="miniMapTooltip"></div>
+      </div>
+      <div class="map-legend">
+        <div id="miniMapLegBar" style="width:120px;height:7px;border-radius:4px;background:linear-gradient(90deg,#d73027,#fee08b,#1a9850)"></div>
+        <span id="miniMapLegLabel" style="font-size:10px;color:var(--text-2)">Low → High attendance</span>
+      </div>
+    </div>
+    <div class="chart-grid">
+      <div class="chart-card wide">
+        <div class="chart-header">
+          <div><div class="chart-title">District Comparison — All Metrics</div><div class="chart-sub">Values shown on bars</div></div>
+          <div class="chart-actions"><button class="chart-btn" onclick="exportChartPNG('chartDistrictBar','District_Metrics')">PNG</button></div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="chartDistrictBar"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-grid">
+      <div class="chart-card wide">
+        <div class="chart-header">
+          <div><div class="chart-title">Presence Rate by District</div><div class="chart-sub">Sorted best → worst · Red dashed = 87% target · Values shown</div></div>
+          <div class="chart-actions">
+            <button class="chart-btn" onclick="exportChartPNG('chartPresenceBar','Presence_Rate')">PNG</button>
+            <button class="chart-btn" onclick="exportChartSVG('chartPresenceBar','Presence_Rate')">SVG</button>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="chartPresenceBar"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-grid">
+      <div class="chart-card wide">
+        <div class="chart-header">
+          <div><div class="chart-title">Absence Rate by District</div><div class="chart-sub">Higher = worse · Values shown on bars</div></div>
+          <div class="chart-actions"><button class="chart-btn" onclick="exportChartPNG('chartAbsence','Absence_Rate')">PNG</button></div>
+        </div>
+        <div class="chart-wrap"><canvas id="chartAbsence"></canvas></div>
+      </div>
+    </div>
+    <div class="section-title" style="display:flex;align-items:center;gap:8px">
+      District Summary Table
+      <div style="display:flex;gap:5px;margin-left:auto">
+        <button onclick="distTableExport('jpg')" style="padding:3px 9px;font-size:10px;border-radius:5px;background:#7c3aed;color:#fff;border:none;cursor:pointer;font-weight:600">📷 JPG</button>
+        <button onclick="distTableExport('pdf')" style="padding:3px 9px;font-size:10px;border-radius:5px;background:#dc2626;color:#fff;border:none;cursor:pointer;font-weight:600">📄 PDF</button>
+        <button onclick="distTableExport('csv')" style="padding:3px 9px;font-size:10px;border-radius:5px;background:#059669;color:#fff;border:none;cursor:pointer;font-weight:600">📊 CSV</button>
+        <button onclick="distTableExport('xlsx')" style="padding:3px 9px;font-size:10px;border-radius:5px;background:#1a56db;color:#fff;border:none;cursor:pointer;font-weight:600">📗 Excel</button>
+        <button onclick="distTableExport('svg')" style="padding:3px 9px;font-size:10px;border-radius:5px;background:#0891b2;color:#fff;border:none;cursor:pointer;font-weight:600">✦ SVG</button>
+      </div>
+    </div>
+    <div class="table-card" id="districtTableCard">
+      <div class="table-header"><div class="table-title">District Summary — Click any row to drill down</div></div>
+      <div class="table-wrap"><table id="districtTable"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: DDO EXPLORER -->
+<div class="tab-panel" id="tab-explorer">
+  <div id="expEmpty" class="empty-state"><span class="eicon">🔍</span><h3>No Data</h3><p>Upload data first.</p></div>
+  <div id="expContent" style="display:none">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:13px;align-items:flex-end">
+      <div class="fg"><label>District</label><select id="explorerDistrict" onchange="renderExplorer()"><option value="all">All Districts</option></select></div>
+      <div class="fg"><label>Sort</label><select id="explorerSort" onchange="renderExplorer()"><option value="pct_desc">Attendance % ↓</option><option value="pct_asc">Attendance % ↑</option><option value="absent_desc">Absent ↓</option><option value="name_asc">Name A→Z</option></select></div>
+      <div class="fg"><label>Search</label><input class="search-box" id="explorerSearch" placeholder="DDO name..." oninput="renderExplorer()" style="min-width:185px"></div>
+    </div>
+    <div id="explorerCount" style="font-size:11px;color:var(--text-2);margin-bottom:8px"></div>
+    <div id="explorerGrid" class="explorer-grid"></div>
+  </div>
+</div>
+
+<!-- TAB: TRENDS -->
+<div class="tab-panel" id="tab-trends">
+  <div id="trendEmpty" class="empty-state"><span class="eicon">📈</span><h3>Upload Multiple Date Sheets</h3><p>Load multiple date-named sheets to unlock trend analysis.</p></div>
+  <div id="trendContent" style="display:none">
+    <div class="filter-bar" style="margin-bottom:13px">
+      <div class="fg"><label>Group By</label><select id="trendGroup" onchange="renderTrends()"><option value="day">Daily</option><option value="week">Weekly</option><option value="month">Monthly</option></select></div>
+      <div class="fg"><label>District</label><select id="trendDistrict" onchange="renderTrends()"><option value="all">All Districts</option></select></div>
+    </div>
+    <div class="trend-stats" id="trendStats"></div>
+    <div class="chart-grid" style="margin-top:14px">
+      <div class="chart-card wide">
+        <div class="chart-header">
+          <div><div class="chart-title">Attendance Rate Over Time</div><div class="chart-sub">Red dashed = 87% target</div></div>
+          <div class="chart-actions"><button class="chart-btn" onclick="exportChartPNG('chartTrend','Attendance_Trend')">PNG</button></div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="chartTrend"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-grid">
+      <div class="chart-card"><div class="chart-header"><div><div class="chart-title">Present vs Absent Over Time</div></div><div class="chart-actions"><button class="chart-btn" onclick="exportChartPNG('chartTrendStack','Present_Absent_Trend')">PNG</button><button class="chart-btn" onclick="exportChartSVG('chartTrendStack','Present_Absent_Trend')">SVG</button></div></div><div class="chart-wrap"><canvas id="chartTrendStack"></canvas></div></div>
+      <div class="chart-card"><div class="chart-header"><div><div class="chart-title">District Trend Comparison</div></div><div class="chart-actions"><button class="chart-btn" onclick="exportChartPNG('chartDistrictTrend','District_Trend')">PNG</button><button class="chart-btn" onclick="exportChartSVG('chartDistrictTrend','District_Trend')">SVG</button></div></div><div class="chart-wrap"><canvas id="chartDistrictTrend"></canvas></div></div>
+    </div>
+    <div class="table-card">
+      <div class="table-header">
+        <div class="table-title">Period Summary</div>
+        <div class="table-controls">
+          <button class="btn btn-ghost btn-sm" onclick="exportTrendTable('csv')">📊 CSV</button>
+          <button class="btn btn-ghost btn-sm" onclick="exportTrendTable('xlsx')">📗 Excel</button>
+          <button class="btn btn-ghost btn-sm" onclick="exportTrendTable('pdf')">📄 PDF</button>
+          <button class="btn btn-ghost btn-sm" onclick="exportTrendTable('jpg')">📷 JPG</button>
+        </div>
+      </div>
+      <div class="table-wrap"><table id="trendTable"><thead></thead><tbody></tbody></table></div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: HEATMAP -->
+<div class="tab-panel" id="tab-heatmap">
+  <div id="hmEmpty" class="empty-state"><span class="eicon">🌡️</span><h3>No Data</h3><p>Upload data first.</p></div>
+  <div id="hmContent" style="display:none">
+    <div class="sub-tabs">
+      <button class="sub-tab active" data-hmtab="map" onclick="switchHmTab('map')">🗺️ Geographic Map</button>
+      <button class="sub-tab" data-hmtab="grid" onclick="switchHmTab('grid')">📊 District × Date Grid</button>
+    </div>
+    <div id="hmMapPanel">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">Gilgit-Baltistan — District Attendance Map</div><div class="chart-sub">Hover for stats · Click to drill down</div></div>
+          <div class="chart-actions">
+            <select id="mapMetric" onchange="renderGeoMap()" style="border:1.5px solid var(--border);border-radius:5px;padding:3px 7px;font-size:11px;font-family:inherit;background:var(--surface-2);color:var(--text-1)">
+              <option value="pct">Attendance %</option><option value="absent">Absent Count</option><option value="present">Present Count</option>
+            </select>
+            <select id="mapDate" onchange="renderGeoMap()" style="border:1.5px solid var(--border);border-radius:5px;padding:3px 7px;font-size:11px;font-family:inherit;background:var(--surface-2);color:var(--text-1)">
+              <option value="all">All Dates</option>
+            </select>
+          </div>
+        </div>
+        <div style="position:relative;background:var(--surface-2);border-radius:9px;border:1.5px solid var(--border);overflow:visible;height:520px">
+          <svg id="geoMap" style="width:100%;height:100%"></svg>
+          <div class="map-tooltip" id="mapTooltip"></div>
+        </div>
+        <div class="map-legend">
+          <div id="mapLegBar" style="width:130px;height:8px;border-radius:4px"></div>
+          <span id="mapLegLabel" style="font-size:10px;color:var(--text-2)"></span>
+        </div>
+      </div>
+    </div>
+    <div id="hmGridPanel" style="display:none">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">District × Date Heatmap</div><div class="chart-sub">Click any cell for details</div></div>
+          <div class="chart-actions">
+            <select id="heatmapMetric" onchange="renderHeatmapGrid()" style="border:1.5px solid var(--border);border-radius:5px;padding:3px 7px;font-size:11px;font-family:inherit;background:var(--surface-2);color:var(--text-1)">
+              <option value="pct">Attendance %</option><option value="absent">Absent Count</option><option value="present">Present Count</option>
+            </select>
+          </div>
+        </div>
+        <div style="overflow-x:auto"><table class="hm-table" id="heatmapTable"></table></div>
+        <div id="hmLegend" style="display:flex;align-items:center;gap:8px;margin-top:9px;font-size:10px;color:var(--text-2)"></div>
+      </div>
+      <div class="chart-card" style="margin-top:14px">
+        <div class="chart-header"><div><div class="chart-title">DDO × Date Heatmap (Top 40 by Headcount)</div></div></div>
+        <div style="overflow-x:auto;max-height:450px;overflow-y:auto"><table class="hm-table" id="heatmapInst"></table></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: REPORTS -->
+<div class="tab-panel" id="tab-reports">
+  <div id="rptEmpty" class="empty-state"><span class="eicon">📋</span><h3>No Data</h3><p>Upload data first.</p></div>
+  <div id="rptContent" style="display:none">
+    <div class="report-section">
+      <div class="report-section-head"><h3>🗺️ District-wise Summary Report</h3><span style="font-size:10px;opacity:.8">GB Map · Bar Charts · District Table — multi-format export</span></div>
+      <div class="report-section-body">
+        <div class="report-controls">
+          <div class="rg"><label>Period</label><select id="rptDistrictDate" onchange="renderDistrictReport()"><option value="all">All Dates</option></select></div>
+          <div class="rg"><label>Sort By</label>
+            <select id="rptDistrictSort" onchange="renderDistrictReport()">
+              <option value="pct_desc">Present % ↓ (Best First)</option>
+              <option value="pct_asc">Present % ↑ (Worst First)</option>
+              <option value="name_asc">District Name A→Z</option>
+              <option value="absent_desc">Absent Count ↓</option>
+            </select>
+          </div>
+          <div class="rg"><label>Export</label>
+            <div class="exp-btns">
+              <button class="exp-btn exp-jpg" onclick="exportDistrictReport('jpg')">📷 JPG</button>
+              <button class="exp-btn exp-pdf" onclick="exportDistrictReport('pdf')">📄 PDF</button>
+              <button class="exp-btn exp-csv" onclick="exportDistrictReport('csv')">📊 CSV</button>
+              <button class="exp-btn exp-xl" onclick="exportDistrictReport('xlsx')">📗 Excel</button>
+            </div>
+          </div>
+        </div>
+        <!-- DISTRICT REPORT PREVIEW -->
+        <div class="letterhead" id="districtReportPreview">
+          <div class="lh-header">
+            <div class="lh-emblem">🏛️</div>
+            <div class="lh-title"><h2>GOVERNMENT OF GILGIT-BALTISTAN</h2><p>School Education Department — District-wise Attendance Summary Report</p></div>
+          </div>
+          <div class="lh-meta" id="districtReportMeta"></div>
+          <!-- GB MAP inside report -->
+          <div style="padding:14px 18px;background:var(--surface-2);border-bottom:1px solid var(--border)">
+            <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:8px">📍 Gilgit-Baltistan — District Attendance Map</div>
+            <div style="position:relative;background:var(--surface);border-radius:8px;border:1.5px solid var(--border);height:280px;overflow:visible">
+              <svg id="rptGeoMap" style="width:100%;height:100%"></svg>
+              <div class="map-tooltip" id="rptMapTooltip"></div>
+            </div>
+            <div class="map-legend" style="margin-top:6px">
+              <div style="width:110px;height:7px;border-radius:4px;background:linear-gradient(90deg,#d73027,#fee08b,#1a9850)"></div>
+              <span style="font-size:10px;color:var(--text-2)">Low attendance → High attendance</span>
+            </div>
+          </div>
+          <!-- TWO CHARTS inside report -->
+          <div style="padding:14px 18px;background:var(--surface-2);border-bottom:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div style="background:var(--surface);border-radius:8px;padding:14px;border:1.5px solid var(--border)">
+              <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:8px">Present % by District <span style="font-size:10px;color:var(--text-2);font-weight:400">(Red dashed = 87% target)</span></div>
+              <div style="position:relative;height:200px"><canvas id="rptChartBar"></canvas></div>
+            </div>
+            <div style="background:var(--surface);border-radius:8px;padding:14px;border:1.5px solid var(--border)">
+              <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:8px">Present vs Absent by District</div>
+              <div style="position:relative;height:200px"><canvas id="rptChartStack"></canvas></div>
+            </div>
+          </div>
+          <!-- DISTRICT TABLE -->
+          <div style="overflow-x:auto">
+            <table id="districtReportTable"><thead></thead><tbody></tbody><tfoot></tfoot></table>
+          </div>
+          <div class="lh-footer">
+            <span>EMIS SEDGB — School Education Department, Gilgit-Baltistan</span>
+            <span>Designed and Developed by Muhammad Hassan Assistant IT EMIS</span>
+            <span id="districtReportFooterDate"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="report-section">
+      <div class="report-section-head"><h3>📑 Attendance Summary Report</h3><span style="font-size:10px;opacity:.8">DDO Code · Name · Attendance % — multi-page hybrid PDF</span></div>
+      <div class="report-section-body">
+        <div class="report-controls">
+          <div class="rg"><label>Period</label><select id="rptAttDate"><option value="all">All Dates</option></select></div>
+          <div class="rg"><label>Sort</label><select id="rptAttSort" onchange="renderAttReport()"><option value="pct_desc">Attendance % ↓</option><option value="pct_asc">Attendance % ↑</option><option value="absent_desc">Absent ↓</option><option value="name_asc">Name A→Z</option></select></div>
+          <div class="rg"><label>Category</label><select id="rptAttCat" onchange="renderAttReport()"><option value="all">All</option><option value="school">Schools</option><option value="office">Offices</option><option value="college">Colleges of Education</option></select></div>
+          <div class="rg"><label>Export</label>
+            <div class="exp-btns">
+              <button class="exp-btn exp-jpg" onclick="exportAttReport('jpg')">📷 JPG</button>
+              <button class="exp-btn exp-pdf" onclick="exportAttReport('pdf')">📄 PDF</button>
+              <button class="exp-btn exp-csv" onclick="exportAttReport('csv')">📊 CSV</button>
+              <button class="exp-btn exp-xl" onclick="exportAttReport('xlsx')">📗 Excel</button>
+              <button class="exp-btn exp-svg" onclick="exportAttReport('svg')">✦ SVG</button>
+            </div>
+          </div>
+        </div>
+        <div class="letterhead" id="attReportPreview">
+          <div class="lh-header"><div class="lh-emblem">🏛️</div><div class="lh-title"><h2>GOVERNMENT OF GILGIT-BALTISTAN</h2><p>School Education Department — EMIS Attendance Summary Report</p></div></div>
+          <div class="lh-meta" id="attReportMeta"></div>
+          <div style="overflow-x:auto"><table id="attReportTable"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
+          <div class="lh-footer"><span>EMIS SEDGB — School Education Department, Gilgit-Baltistan</span><span>Designed and Developed by Muhammad Hassan Assistant IT EMIS</span><span id="attReportFooterDate"></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="report-section">
+      <div class="report-section-head"><h3>📦 Full Data Export</h3><span style="font-size:10px;opacity:.8">All columns — properly paginated multi-page PDF</span></div>
+      <div class="report-section-body">
+        <div class="report-controls">
+          <div class="rg"><label>Sort</label><select id="rptFullSort"><option value="pct_desc">Attendance % ↓</option><option value="pct_asc">Attendance % ↑</option><option value="absent_desc">Absent ↓</option><option value="emp_desc">Employees ↓</option><option value="name_asc">Name A→Z</option></select></div>
+          <div class="rg"><label>Category</label><select id="rptFullCat"><option value="all">All</option><option value="school">Schools</option><option value="office">Offices</option><option value="college">Colleges of Education</option></select></div>
+          <div class="rg"><label>Export</label>
+            <div class="exp-btns">
+              <button class="exp-btn exp-pdf" onclick="exportFullData('pdf')">📄 PDF (Paginated)</button>
+              <button class="exp-btn exp-csv" onclick="exportFullData('csv')">📊 CSV</button>
+              <button class="exp-btn exp-xl" onclick="exportFullData('xlsx')">📗 Excel</button>
+            </div>
+          </div>
+          <div style="align-self:flex-end;font-size:11px;color:var(--text-2)"><strong id="fullDataCount">0</strong> records will be exported</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<!-- MODAL -->
+<div class="modal-overlay" id="drillModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3 id="drillTitle">Details</h3>
+      <div class="modal-export-btns" id="drillExportBtns"></div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="drillBody"></div>
+  </div>
+</div>
+<script>
+// ★ EMBEDDED GB GEOJSON (#11)
+const GB_GEOJSON={"type":"FeatureCollection","features":[{"type":"Feature","properties":{"name":"Ghanche"},"geometry":{"type":"Polygon","coordinates":[[[75.91435659800004,35.21405944800006],[75.91170282800005,35.232089676000044],[75.87513253200007,35.23486838300005],[75.86674001600005,35.26609194200006],[75.92565547000004,35.28855405400003],[75.98686737200006,35.34487840000003],[76.01790109500007,35.35267245400007],[76.02641140800006,35.37226276900003],[75.97142211200008,35.39175450600004],[75.98497880900004,35.41411702000005],[75.97126881700007,35.41310953900006],[75.94633343400005,35.46750666100007],[75.98687145700006,35.47848544000004],[76.01966062800005,35.46938331900003],[76.04819990700008,35.51905275200005],[76.06798561700003,35.49554618700006],[76.08713750500004,35.49342328900008],[76.08792493200008,35.46600956200007],[76.18433978800005,35.464195061000055],[76.20008983900004,35.48034643900007],[76.17946552700005,35.48464754100007],[76.18886728600006,35.50488503100007],[76.15338148700005,35.51450798500008],[76.14353817900007,35.54439373900004],[76.17699440000007,35.56855718400004],[76.15525042800004,35.58789301300004],[76.17051126100006,35.60610395400005],[76.22994800500004,35.59583876500005],[76.26688194300004,35.61449995100003],[76.27371335600003,35.64843459300005],[76.32533940500008,35.635030621000055],[76.36587083400008,35.63927770600003],[76.42506360300007,35.67834894300006],[76.49006862400006,35.672191662000046],[76.48637762700008,35.62747823700005],[76.53143553400008,35.60285467600005],[76.57899435400003,35.61521698000007],[76.61560875300006,35.59984706700004],[76.72613272900008,35.641939867000076],[76.73879679200007,35.66440350100004],[76.77422087500008,35.65862607500003],[76.84605085300007,35.67215925900007],[76.91550137200005,35.61237530200003],[76.96517262100008,35.59408319500005],[77.00844906700007,35.609400976000074],[77.06149275400008,35.59643009600006],[77.09037103100007,35.570275938000066],[77.19291838000004,35.520082744000035],[77.30485280700003,35.54130271100007],[77.39412662600006,35.46854713400006],[77.44908048100007,35.46130137200004],[77.53684162900004,35.48252133900007],[77.57575199600006,35.47677187700003],[77.58556471700007,35.46141596800004],[77.66865400000006,35.46012600000006],[77.69131700000008,35.44924000000003],[77.68180000000007,35.42181800000003],[77.61768600100004,35.37873600100005],[77.61211900100005,35.35167300000006],[77.59010199900007,35.32868700000006],[77.43362199900008,35.243652000000054],[77.16851400000007,35.05998500000004],[77.09077349500006,35.04494282500008],[77.07779493600003,35.054707128000075],[77.04867551800004,35.05024111600005],[77.01147223500004,35.02643326500004],[76.95945087400008,35.016221216000076],[76.93343017700005,35.00461626900005],[76.93822706500004,34.981830724000076],[76.90100995300008,34.92650477700005],[76.84945709500005,34.95048140400007],[76.74770317000008,34.891307002000076],[76.73711294600008,34.80694493800007],[76.70145038500004,34.795640313000035],[76.69339727300007,34.74827937500004],[76.64441925000006,34.73427914900003],[76.63545444200008,34.76326594000005],[76.59324392600007,34.74796121400004],[76.56249560700007,34.765059251000025],[76.53400282000007,34.76410952700007],[76.50361199900004,34.793951685000025],[76.45708226100004,34.77978795300004],[76.43464997700005,34.801285214000075],[76.42834440600006,34.84506729700007],[76.41501942400004,34.852443626000024],[76.41287790900003,34.908836851000046],[76.36850096100005,34.97831711300006],[76.37218912600008,34.999375343000054],[76.35124987000006,35.00318248000008],[76.33423672400005,35.037327746000074],[76.31068005900005,35.039588234000064],[76.29307204800006,35.06028954400006],[76.16808992000006,35.08108411000006],[76.11711090600005,35.112042821000045],[76.03898939500004,35.12775207100003],[75.91458583800005,35.213879331000044],[75.91435659800004,35.21405944800006]]]}},{"type":"Feature","properties":{"name":"Astore"},"geometry":{"type":"Polygon","coordinates":[[[74.74146410700007,35.71763331300008],[74.71747073400007,35.69372995500004],[74.71669931400004,35.67268416700006],[74.73267566100003,35.65868177900006],[74.81666364300008,35.62785558200005],[74.86948497600008,35.57548439400006],[74.86383375600008,35.55763843700004],[74.90800250200004,35.523582400000066],[74.95305874100006,35.510253987000056],[74.97853369100005,35.475784978000036],[75.01053800100004,35.47860500000007],[75.02029323200003,35.440331008000044],[75.08572840900007,35.41463283000007],[75.10060004100006,35.38286702500005],[75.13867141700007,35.35050635500005],[75.16758186900006,35.35026841000007],[75.17947679700006,35.290874717000065],[75.17847677200007,35.25483058100008],[75.16361960300003,35.24808058200006],[75.17121500000007,35.227824000000055],[75.20945071600005,35.190439291000075],[75.23777596800005,35.19560344400003],[75.24563039300006,35.156482968000034],[75.21864396700005,35.13867998400008],[75.21677599900005,35.11023000000006],[75.19298640300008,35.10671158200006],[75.21165366100007,35.06930853000006],[75.19632163900008,35.03156992900006],[75.22198664000007,35.025794473000076],[75.22853059300007,35.00867657600003],[75.19558288600007,34.97325633200006],[75.21278427100003,34.94739548500007],[75.15308400000004,34.93123300000008],[75.14867687300006,34.91742305200006],[75.16517517000005,34.87337796700007],[75.14557102300006,34.83714618500005],[75.17551466000003,34.83630180500006],[75.23523802200003,34.800936671000045],[75.26289370900008,34.72718585700005],[75.25079422900006,34.702144573000055],[75.25633968200003,34.685848004000036],[75.20461069300006,34.64286139700005],[75.18683822700007,34.659282150000024],[75.14227801400006,34.65335767800008],[75.12842505800006,34.637241474000064],[75.11610768600008,34.65136305900006],[75.08731386000005,34.65299043700003],[75.04606999900005,34.61961799900007],[75.02277100000003,34.61886700000008],[74.94826400000005,34.63500600000003],[74.93132000000008,34.652307000000064],[74.88955100000004,34.66280300000005],[74.87532042400005,34.68005283100007],[74.87926006600003,34.715555997000024],[74.93660224900003,34.74612049700005],[74.90096161300005,34.805773550000026],[74.83289443500007,34.82204331600008],[74.79551408000003,34.845320628000024],[74.74523104700006,34.829345200000034],[74.72649840800005,34.858320510000055],[74.68195489900006,34.868885316000046],[74.66310956700005,34.89986589800003],[74.60100563500004,34.91442820000003],[74.57516468800003,34.89843822300003],[74.56468800000005,34.97313500000007],[74.58300739200007,35.00198284700008],[74.57547176400004,35.01518101100004],[74.56025974500005,35.01102479900004],[74.53456156600004,35.02920388100006],[74.53817834700004,35.068131864000065],[74.50258160900006,35.10239610200006],[74.46241630800006,35.10686948800003],[74.45042382500003,35.132567668000036],[74.40409792100007,35.14747892100007],[74.44309508500004,35.18919883900003],[74.48198131400005,35.21017200800003],[74.48732881600006,35.227085756000065],[74.56685329700008,35.22733939700004],[74.61359285100008,35.25957644400006],[74.63496101600003,35.258349543000065],[74.67312826000006,35.302020775000074],[74.68269600000008,35.335840192000035],[74.71812766800008,35.35426694600005],[74.73182951700005,35.384855292000054],[74.70357766500007,35.43675973100005],[74.71395126600004,35.45665813000005],[74.70310704000008,35.48203394800004],[74.67576094200007,35.501574246000075],[74.66765010500006,35.55416145400005],[74.62717076900003,35.59035026600003],[74.63516129300007,35.606925759000035],[74.61207916800004,35.62551820500005],[74.61337993700005,35.65194607700005],[74.63778748700008,35.670698979000065],[74.65116723600005,35.703468033000036],[74.62425177600005,35.730298076000054],[74.65221044300006,35.77104634500006],[74.62335947800005,35.78814872100003],[74.65384632200005,35.826368814000034],[74.74099408200004,35.848081396000055],[74.72894806100004,35.791717912000024],[74.75898875600006,35.76524640900004],[74.74144023100007,35.74561585600003],[74.74069665000007,35.71840077000007],[74.74146410700007,35.71763331300008]]]}},{"type":"Feature","properties":{"name":"Diamer"},"geometry":{"type":"Polygon","coordinates":[[[73.33383585000007,35.94479498600003],[73.40109415200004,35.88745571000004],[73.46876638600008,35.869680103000064],[73.49242997100004,35.87665819000006],[73.51841935300007,35.85537517900008],[73.54804745100006,35.88261245100006],[73.62190241500008,35.86034766500006],[73.64167380900005,35.87801483100003],[73.68006355800003,35.87853609500007],[73.75864846600007,35.85252541400007],[73.77578902000005,35.88048472100007],[73.80558445400004,35.86586432400003],[73.83289105000006,35.87651967700003],[73.88388497000005,35.83942030000003],[73.90861844600005,35.86064645000005],[73.94277317200005,35.85287610900008],[73.94962124500006,35.82532148000007],[73.96503244000007,35.81863346000006],[74.02174278500007,35.825456581000026],[74.06607341400007,35.75590934300004],[74.10226377000004,35.75172851600007],[74.13972446200006,35.71239789300006],[74.16958287200003,35.712065376000055],[74.23145828300005,35.62889786300008],[74.28029228200006,35.641636590000076],[74.39029237400007,35.56839137000003],[74.40685271800004,35.58274966100004],[74.46739051900005,35.55758184700005],[74.48748480300003,35.57736694400006],[74.53541916500006,35.57373750900007],[74.56445492000006,35.62147840700004],[74.61952535600005,35.62231099400003],[74.63516129300007,35.606925759000035],[74.62717076900003,35.59035026600003],[74.66790267600004,35.55373627800003],[74.67576094200007,35.501574246000075],[74.70601082900004,35.47654833400003],[74.71441861600005,35.455421509000075],[74.70357766500007,35.43675973100005],[74.73182951700005,35.384855292000054],[74.71240551800008,35.345633691000046],[74.68269600000008,35.335840192000035],[74.67312826000006,35.302020775000074],[74.63496101600003,35.258349543000065],[74.61359285100008,35.25957644400006],[74.56685329700008,35.22733939700004],[74.48732881600006,35.227085756000065],[74.48198131400005,35.21017200800003],[74.44309508500004,35.18919883900003],[74.40400243700003,35.14792214200003],[74.43944276900004,35.13135099400006],[74.43247860300005,35.11390638200004],[74.36485879600008,35.05761827400005],[74.29140755700007,35.06301828200003],[74.27014767100007,35.045239769000034],[74.24175397600004,35.04249412100006],[74.20533350400007,35.08578445000006],[74.16557251700004,35.08038333500008],[74.14487873700006,35.09023883700007],[74.13174974300006,35.112645729000064],[74.10535897100004,35.124865863000025],[74.10937972800008,35.148547575000066],[74.09632086600004,35.13984451600004],[74.07529237300008,35.152468784000064],[74.03209537500004,35.14603693000004],[73.99583558000006,35.18205071600005],[73.95448890400007,35.16888056500005],[73.91347063400008,35.21280659300004],[73.85445029900006,35.20773739200007],[73.80973055600003,35.239269171000046],[73.74765284300008,35.21635900600006],[73.73275110000003,35.227043104000074],[73.74838205600008,35.24460636600003],[73.67965269300004,35.32728054300003],[73.69665838700007,35.342249896000055],[73.70575705200008,35.39418354500003],[73.74772141400007,35.43445341100005],[73.75163391800004,35.462632822000046],[73.78609386000005,35.48790120600006],[73.79003654000007,35.516355746000045],[73.74089248200005,35.517960490000064],[73.72868711500007,35.53114641700006],[73.66656307100004,35.524257007000074],[73.61757087700005,35.54697022800008],[73.55572136700005,35.525599267000075],[73.52547143900006,35.543295939000075],[73.49835416400003,35.53021747500003],[73.47447743100008,35.53982311800007],[73.29740682100004,35.49839315000003],[73.28222306700007,35.535590015000025],[73.30414894900008,35.58755452200006],[73.29652539300008,35.623096212000064],[73.18407257100006,35.68267407500008],[73.20801897900003,35.754390073000025],[73.19229890000008,35.80851944500006],[73.20039485300003,35.81764984300003],[73.18555846400005,35.83945432300004],[73.25589144300005,35.865433583000026],[73.26458160900006,35.887615192000055],[73.24951277800005,35.91303517600005],[73.26243676700005,35.91703920500004],[73.26251511700008,35.93597985700006],[73.28864583300003,35.92845594100004],[73.33343308700006,35.945152463000056],[73.33383585000007,35.94479498600003]]]}},{"type":"Feature","properties":{"name":"Shigar"},"geometry":{"type":"Polygon","coordinates":[[[75.63991867800007,36.11247377700005],[75.67989362300005,36.12103983700007],[75.69226682000004,36.102480041000035],[75.68655611400004,36.08249256900007],[75.73080736400004,36.08563916500003],[75.73003897900008,36.070106956000075],[75.75323872300004,36.062968572000045],[75.78857372000004,36.01478448700004],[75.86923744800004,36.02120903100007],[75.93826746000008,36.066649433000066],[75.99760526900008,36.014152575000026],[76.09917851100005,36.017870483000024],[76.11460200000005,35.97755600000005],[76.14581800000008,35.95731400000005],[76.16902400000004,35.918502999000054],[76.16241386500008,35.86740986800004],[76.14102604900006,35.850758151000036],[76.17129002500008,35.82069737300003],[76.21775449700004,35.82538797300003],[76.24405175700008,35.843819858000074],[76.30616229300006,35.843924025000035],[76.35862887400003,35.828266943000074],[76.36218100100007,35.85646500000007],[76.43066753300008,35.85689337300005],[76.46737345000008,35.890220775000046],[76.52179385100004,35.88892210100005],[76.56820292400005,35.92687947100006],[76.59760473400007,35.92906088500007],[76.59414039600006,35.913843102000044],[76.61482216400003,35.907672725000054],[76.58603578500004,35.88009779600003],[76.59918609600004,35.848673216000066],[76.57140409800007,35.83090809200007],[76.58809714800003,35.80995639100007],[76.57717436900003,35.80278184600007],[76.58719262800008,35.776507467000044],[76.69150486100006,35.74905749100003],[76.70521055700004,35.72183645700005],[76.75927191100004,35.68033865700005],[76.75586826700004,35.668057102000034],[76.66045405000006,35.609563414000036],[76.61560875300006,35.59984706700004],[76.57899435400003,35.61521698000007],[76.53538126200004,35.601468659000034],[76.49919467900008,35.61741144100006],[76.48567176700004,35.63015879100004],[76.49564878300004,35.666413256000055],[76.46686791000008,35.68205368200006],[76.40705242200005,35.67395619000007],[76.38544399200003,35.64767625200005],[76.34426521000006,35.635166380000044],[76.27371335600003,35.64843459300005],[76.25597826700005,35.603731922000065],[76.22216332900007,35.59501111600008],[76.17699906200005,35.608423843000025],[76.15527656700004,35.59064598900005],[76.17699440000007,35.56855718400004],[76.14353817900007,35.54439373900004],[76.15338148700005,35.51450798500008],[76.18886728600006,35.50488503100007],[76.17946552700005,35.48464754100007],[76.20008983900004,35.48034643900007],[76.19048460400006,35.46745982400006],[76.08792493200008,35.46600956200007],[76.08713750500004,35.49342328900008],[76.06798561700003,35.49554618700006],[76.04819990700008,35.51905275200005],[76.01966062800005,35.46938331900003],[75.98687145700006,35.47848544000004],[75.94633343400005,35.46750666100007],[75.97126881700007,35.41310953900006],[75.98497880900004,35.41411702000005],[75.97142211200008,35.39175450600004],[76.02641140800006,35.37226276900003],[76.01790109500007,35.35267245400007],[75.98686737200006,35.34487840000003],[75.92565547000004,35.28855405400003],[75.86476843100007,35.26085138000008],[75.85551326300003,35.31860256400006],[75.79905943500006,35.34962070500006],[75.79676872400006,35.32687664000008],[75.77695618800004,35.30982876000007],[75.74161942300003,35.31255560400007],[75.72373761200004,35.29823055700007],[75.68871512200008,35.32050269500007],[75.66042331900007,35.295610741000075],[75.63104845400005,35.33357940500008],[75.70128419400004,35.37689749300006],[75.73721405600008,35.37784927700005],[75.73220727300003,35.409389033000025],[75.65207421300005,35.40823494600005],[75.62881869800003,35.43592220600004],[75.58943862000007,35.45234048700007],[75.56385941400004,35.447819511000034],[75.54934470200004,35.47280385200003],[75.52114808800007,35.473279744000024],[75.51960143900004,35.48684267100003],[75.48876124500003,35.49419044700005],[75.42178383200007,35.61085899500006],[75.37282371200007,35.641267439000046],[75.36904157600003,35.66167204000004],[75.34906928900006,35.67354026600003],[75.33951213900008,35.71592097900003],[75.30825467900007,35.741759940000065],[75.20605035300008,35.766668999000046],[75.19052195400008,35.76037285600006],[75.16617955300006,35.78109565700004],[75.13455727700006,35.77851108200008],[75.10649551400007,35.85017325900003],[75.06776548200008,35.86403741500004],[75.03485555100008,35.85379369300006],[75.01103022000007,35.873530447000064],[74.96633782000004,35.868330565000065],[74.96202222200003,35.92848925100003],[74.92567755300007,35.93890301500005],[74.93259082800006,35.96710308000007],[74.88579551000004,36.003677991000075],[74.91466300000008,36.042486161000056],[74.96620113600005,36.05954069200004],[75.01009603600005,36.043812786000046],[75.05510844300005,36.09784094200006],[75.06762901800005,36.07841146000004],[75.09849037100008,36.078509721000046],[75.10924313800007,36.058073024000066],[75.10098285200007,36.04938184100007],[75.14976358900003,36.029245065000055],[75.17595097200007,36.057734597000035],[75.20061036000004,36.06093076500008],[75.20957108300007,36.05090018300007],[75.29811652500007,36.04881839600006],[75.51985966000007,36.01412092700008],[75.55378219000005,36.02871675000006],[75.55568575900008,36.04251762400003],[75.53998131700007,36.068215802000054],[75.49429566400005,36.08058900000003],[75.48477782100008,36.09962468800006],[75.49810280200006,36.11818448300005],[75.57281787900007,36.101052364000054],[75.57972903500007,36.12300828900004],[75.60273271200003,36.13219774300006],[75.63602270300004,36.11414355100004],[75.63991867800007,36.11247377700005]]]}},{"type":"Feature","properties":{"name":"Hunza"},"geometry":{"type":"Polygon","coordinates":[[[74.72515699700006,37.03865818700007],[74.73299081000005,37.02071542300007],[74.77687359700008,37.02304123700003],[74.79346398800004,37.02954916400006],[74.79872194800004,37.051343030000055],[74.82252758200008,37.06338371900006],[74.83524622700008,37.056466158000035],[74.85240850000008,37.03791497700007],[74.84294981600004,37.01606196700004],[74.88008400000007,36.96302300000008],[74.88184700000005,36.94016400000004],[74.90751844300007,36.930293697000025],[74.93207448100003,36.946569209000074],[74.91941574800006,36.97873952200007],[74.97595174100007,36.997584854000024],[74.98680208300004,36.98958986500003],[75.02849024100004,37.01214715500004],[75.07417589200008,37.00234377600003],[75.14568764100005,37.02627456000005],[75.16875432700004,37.009539905000054],[75.16076390700005,36.98933771000003],[75.23267769000006,36.95918518000008],[75.29449037600006,36.97546754700005],[75.37394229300008,36.946822643000075],[75.39826222100004,36.956031780000046],[75.40995075600006,36.94476882300006],[75.38764732500005,36.930781671000034],[75.38693995700004,36.90425542100007],[75.42403330300004,36.88671459100004],[75.43313630900008,36.83429121100005],[75.40977000000004,36.776230000000055],[75.43535789500004,36.75850372300005],[75.45401286900005,36.721574488000044],[75.48789639400007,36.72062270400005],[75.50065030500008,36.739087322000046],[75.53377240200007,36.72176484600004],[75.53472418600006,36.77163834800007],[75.56879806800004,36.775064772000064],[75.67396642700004,36.76539508900004],[75.80274667400005,36.71034343300005],[75.94549054000004,36.60267758100008],[75.92474164000004,36.561750851000056],[75.96385997900006,36.53300696300005],[75.97185496800006,36.50921235200008],[75.98632209000004,36.50930753100005],[75.99070029900008,36.485798457000044],[76.01306723300007,36.46419295000004],[76.03682288600004,36.40791903400003],[76.00503328700006,36.38602799300003],[75.98447474400007,36.34338805200008],[75.99558682700007,36.307458190000034],[76.03306333800003,36.301033646000064],[76.02556803500005,36.272480114000075],[76.06268762800005,36.23714511800006],[76.06161687000008,36.225723705000064],[76.03163566100005,36.224296028000026],[76.04662626600003,36.20752082800004],[76.04626934700008,36.17575502400007],[75.95561188300007,36.160407501000066],[75.96489178100006,36.147915330000046],[75.93062754100004,36.136850837000054],[75.95239961000004,36.07867301400006],[75.87316355900003,36.02299362700006],[75.80998886900005,36.012286053000025],[75.77715230700005,36.01978135500008],[75.75323872300004,36.062968572000045],[75.73003897900008,36.070106956000075],[75.73080736400004,36.08563916500003],[75.68655611400004,36.08249256900007],[75.69226682000004,36.102480041000035],[75.67989362300005,36.12103983700007],[75.63991867800007,36.11247377700005],[75.59891017700005,36.13221691700005],[75.57765350400007,36.12063292800008],[75.57281787900007,36.101052364000054],[75.44999560500008,36.13634377200003],[75.41727547300007,36.20480353800008],[75.38816060400006,36.20955298300004],[75.35895778600008,36.248654438000074],[75.30002006800004,36.222929548000025],[75.28580749000008,36.20049406000004],[75.21023631600008,36.20351312100007],[75.21996840700007,36.257518434000076],[75.23562331200003,36.27251639900004],[75.19864824500007,36.32863923000008],[75.08194184100006,36.288612896000075],[75.05375001100003,36.31811780500004],[75.03661792000008,36.31916786900007],[75.02926011700004,36.348986645000025],[75.01359510000003,36.34884037000006],[74.96735045600008,36.317529093000076],[74.94895557400008,36.27592803300007],[74.87602633800003,36.286608787000034],[74.79024607000008,36.274562306000064],[74.70936621100003,36.288556130000075],[74.67977225100003,36.31130230300005],[74.64490900800007,36.31172596500005],[74.61177436700007,36.29831278300003],[74.61007019600004,36.27658869900006],[74.57523057400005,36.27183053600004],[74.56620202200008,36.25456235100006],[74.42648185500008,36.235937626000066],[74.36586074600007,36.25000330000006],[74.38516820100006,36.26884260200006],[74.39808641800005,36.314870822000046],[74.45777260700004,36.37777018300005],[74.42694018400005,36.42822513300007],[74.48844918100008,36.478227727000046],[74.49913673500004,36.51376555600007],[74.51474100600007,36.52451190800008],[74.44206946900005,36.55746798300004],[74.42259197600004,36.55265252200007],[74.39938805700007,36.57032560600004],[74.38112606100003,36.56860358500006],[74.37247059500004,36.58582719200007],[74.30206166000005,36.60089171000004],[74.29863264100004,36.615182065000056],[74.31616106800004,36.629530654000064],[74.24700000000007,36.67501900000008],[74.18350611700004,36.68425825700007],[74.19690700000007,36.72024299900005],[74.16922935200006,36.72917058300004],[74.09546606100008,36.72262706600003],[74.11504315000008,36.74946411700006],[74.10487402100006,36.780447397000046],[74.06245103900005,36.79520062600005],[74.04799299500007,36.82803779100004],[74.06297420000004,36.84088477000006],[74.13099350700008,36.84268723100007],[74.13636609200006,36.87632631400004],[74.17300767100005,36.906569266000076],[74.24225791600003,36.895526791000066],[74.32353362400005,36.93339071500003],[74.35111231200005,36.96312336400007],[74.39696189300008,36.96608482200003],[74.43241930500005,37.01283107300003],[74.49887103900005,36.97929418100006],[74.51324569600007,36.985065442000064],[74.54301198600007,36.957351205000066],[74.51884613900006,37.028680835000046],[74.52730289800007,37.03982369900007],[74.58535338500008,37.033481907000066],[74.69001018700004,37.08507981200006],[74.70789465600006,37.07916263200008],[74.72661676700005,37.04641296600005],[74.72515699700006,37.03865818700007]]]}},{"type":"Feature","properties":{"name":"Kharmang"},"geometry":{"type":"Polygon","coordinates":[[[75.66936508000003,35.08327428800004],[75.66930987200004,35.08319612500003],[75.66936508000003,35.08327428800004]],[[76.16373157600003,34.63307075600005],[76.10733835000008,34.628311833000055],[76.05475440300006,34.663351145000036],[76.03693442600007,34.69849771400004],[75.97506564900004,34.749707923000074],[75.96095964900007,34.77964310200008],[75.97500944200004,34.80637195700007],[75.95572435900004,34.85841651800007],[75.91905396600004,34.868520802000035],[75.89326383200006,34.912850519000074],[75.86255836900006,34.91933509300003],[75.86986840800006,34.925843944000064],[75.85008067900003,34.93821125100004],[75.82888536700005,34.91927123000005],[75.80840674100006,34.935513453000056],[75.78806252100003,34.92878789900004],[75.75165506000008,34.98266962200006],[75.72251373900008,34.98157462200004],[75.72079623100007,35.010500379000064],[75.66784466900003,35.04972356400003],[75.66554634100004,35.07738006400007],[75.74431976600005,35.128300086000024],[75.81171308700004,35.15462275100003],[75.92773619700006,35.14158406700005],[75.93272685100004,35.15988016000006],[75.90443246600006,35.196669049000036],[75.91629877500003,35.20985282100003],[76.03898939500004,35.12775207100003],[76.11711090600005,35.112042821000045],[76.16808992000006,35.08108411000006],[76.29307204800006,35.06028954400006],[76.31068005900005,35.039588234000064],[76.33423672400005,35.037327746000074],[76.35124987000006,35.00318248000008],[76.37218912600008,34.999375343000054],[76.36850096100005,34.97831711300006],[76.41347277500006,34.907409175000055],[76.41501942400004,34.852443626000024],[76.42834440600006,34.84506729700007],[76.43464997700005,34.801285214000075],[76.45083031200005,34.79628834600004],[76.45939637200007,34.77308860100004],[76.41960612300005,34.737275185000044],[76.25769888700006,34.71711656000008],[76.27010715000006,34.698162929000034],[76.24604981900006,34.68726289500006],[76.25270249000005,34.67313381400004],[76.18243293000006,34.656415941000034],[76.16380694900005,34.63305933600003],[76.16373157600003,34.63307075600005]],[[75.91674490600008,35.212023911000074],[75.91661594600004,35.21214521300004],[75.91674490600008,35.212023911000074]]]}},{"type":"Feature","properties":{"name":"Nagar"},"geometry":{"type":"Polygon","coordinates":[[[74.32250230400007,36.59080106600004],[74.37247059500004,36.58582719200007],[74.38112606100003,36.56860358500006],[74.39938805700007,36.57032560600004],[74.42259197600004,36.55265252200007],[74.44206946900005,36.55746798300004],[74.51474100600007,36.52451190800008],[74.49913673500004,36.51376555600007],[74.48844918100008,36.478227727000046],[74.42694018400005,36.42822513300007],[74.45777260700004,36.37777018300005],[74.39732339400007,36.31379054100006],[74.37026075600005,36.24758158100008],[74.42648185500008,36.235937626000066],[74.56814340400007,36.25499873800004],[74.57523057400005,36.27183053600004],[74.61007019600004,36.27658869900006],[74.61177436700007,36.29831278300003],[74.64490900800007,36.31172596500005],[74.67977225100003,36.31130230300005],[74.70936621100003,36.288556130000075],[74.79024607000008,36.274562306000064],[74.87602633800003,36.286608787000034],[74.94895557400008,36.27592803300007],[74.96735045600008,36.317529093000076],[75.01359510000003,36.34884037000006],[75.02926011700004,36.348986645000025],[75.03661792000008,36.31916786900007],[75.05375001100003,36.31811780500004],[75.08194184100006,36.288612896000075],[75.19864824500007,36.32863923000008],[75.23562331200003,36.27251639900004],[75.21996840700007,36.257518434000076],[75.20635915600008,36.206525457000055],[75.23475922900008,36.195595755000056],[75.28580749000008,36.20049406000004],[75.30002006800004,36.222929548000025],[75.36184300900004,36.24720498800008],[75.36397199800007,36.230023913000025],[75.38816060400006,36.20955298300004],[75.41727547300007,36.20480353800008],[75.44384243000007,36.14030263500007],[75.49831253300005,36.118199470000036],[75.48477782100008,36.09962468800006],[75.49429566400005,36.08058900000003],[75.53998131700007,36.068215802000054],[75.55378219000005,36.02871675000006],[75.51766792100005,36.013827897000056],[75.29811652500007,36.04881839600006],[75.20957108300007,36.05090018300007],[75.20061036000004,36.06093076500008],[75.17595097200007,36.057734597000035],[75.14976358900003,36.029245065000055],[75.10098285200007,36.04938184100007],[75.10924313800007,36.058073024000066],[75.09849037100008,36.078509721000046],[75.06762901800005,36.07841146000004],[75.05510844300005,36.09784094200006],[75.01009603600005,36.043812786000046],[74.96620113600005,36.05954069200004],[74.91466300000008,36.042486161000056],[74.88042603200006,36.002690303000065],[74.85280999900004,36.04158000000007],[74.74281429000007,36.05666351900004],[74.72230940100008,36.085698137000065],[74.66672519200006,36.103782040000056],[74.66082412800006,36.121865944000035],[74.62827310200004,36.136713780000036],[74.54948308300004,36.157493180000074],[74.48833049600006,36.143017377000035],[74.40888287300004,36.16491061500005],[74.37478478600008,36.19366552300005],[74.31815737900007,36.20435499600006],[74.28248721900007,36.18090516400008],[74.20135634600007,36.20916513000003],[74.16014377700003,36.23851382600003],[74.13314999900007,36.31432600000005],[74.02838112200004,36.364625260000025],[74.07805237100007,36.375630267000076],[74.10839049900005,36.40358893400003],[74.12366909800005,36.521863945000064],[74.18397415800007,36.531361993000075],[74.18750757800007,36.56360768600007],[74.22159325800004,36.57846747800005],[74.22554400000007,36.59624000000008],[74.26619238700005,36.59026954700005],[74.29863264100004,36.615182065000056],[74.32118672500008,36.592415509000034],[74.32250230400007,36.59080106600004]]]}},{"type":"Feature","properties":{"name":"Skardu"},"geometry":{"type":"Polygon","coordinates":[[[75.01103022000007,35.873530447000064],[75.03485555100008,35.85379369300006],[75.06776548200008,35.86403741500004],[75.10649551400007,35.85017325900003],[75.12184070000006,35.825349103000065],[75.12315148500005,35.78591853300003],[75.14099227000008,35.77540248200006],[75.16617955300006,35.78109565700004],[75.19052195400008,35.76037285600006],[75.20605035300008,35.766668999000046],[75.30825467900007,35.741759940000065],[75.34053786200008,35.71505147600004],[75.34515735100007,35.68166254100004],[75.36904157600003,35.66167204000004],[75.37282371200007,35.641267439000046],[75.42491725800005,35.60676859700004],[75.46928567800006,35.53589426700006],[75.47400858600008,35.50543340000007],[75.51960143900004,35.48684267100003],[75.52114808800007,35.473279744000024],[75.54934470200004,35.47280385200003],[75.56385941400004,35.447819511000034],[75.58943862000007,35.45234048700007],[75.62881869800003,35.43592220600004],[75.65207421300005,35.40823494600005],[75.73220727300003,35.409389033000025],[75.73721405600008,35.37784927700005],[75.70128419400004,35.37689749300006],[75.63104845400005,35.33357940500008],[75.65374802300005,35.29779413700004],[75.68871512200008,35.32050269500007],[75.72373761200004,35.29823055700007],[75.74161942300003,35.31255560400007],[75.77695618800004,35.30982876000007],[75.79676872400006,35.32687664000008],[75.79905943500006,35.34962070500006],[75.85551326300003,35.31860256400006],[75.86955000200004,35.24306765400007],[75.88621865700003,35.227559100000065],[75.91548880500005,35.22883199000006],[75.90419706600005,35.19819915700003],[75.93272685100004,35.15988016000006],[75.92828887900004,35.141910049000046],[75.84327932900004,35.156817990000036],[75.78977779100006,35.14755576400006],[75.73055415700003,35.120404594000036],[75.70788022200003,35.095272941000076],[75.68399343100003,35.09454171300007],[75.66554634100004,35.07738006400007],[75.66784466900003,35.04972356400003],[75.72079623100007,35.010500379000064],[75.72251373900008,34.98157462200004],[75.75165506000008,34.98266962200006],[75.78999797400007,34.92733044500005],[75.80840674100006,34.935513453000056],[75.82888536700005,34.91927123000005],[75.85008067900003,34.93821125100004],[75.86986840800006,34.925843944000064],[75.86255836900006,34.91933509300003],[75.89326383200006,34.912850519000074],[75.91905396600004,34.868520802000035],[75.95572435900004,34.85841651800007],[75.97533935800004,34.803685261000055],[75.96164442500003,34.776357166000025],[75.98572004900007,34.734114145000035],[76.03693442600007,34.69849771400004],[76.05376637200004,34.65898675300008],[76.01655075100007,34.66523413800007],[75.98770702800005,34.643640454000035],[76.00008330200006,34.628508519000036],[75.97512681400008,34.604732342000034],[75.90883885300008,34.59880216400006],[75.88142528500003,34.54388814400005],[75.85420774200009,34.54694472800003],[75.82160326400003,34.51634478300008],[75.74860800000005,34.51114400000006],[75.62494300000003,34.51375400000006],[75.52041300100007,34.545015000000035],[75.43242500000008,34.54592500000007],[75.32614200100005,34.56863100000004],[75.26094900000004,34.60760400000004],[75.25899100000004,34.63137800000004],[75.24418300000008,34.64170500000006],[75.20516743800005,34.64067595900008],[75.25633968200003,34.685848004000036],[75.25079422900006,34.702144573000055],[75.26289370900008,34.72718585700005],[75.23523802200003,34.800936671000045],[75.17551466000003,34.83630180500006],[75.14557102300006,34.83714618500005],[75.16517517000005,34.87337796700007],[75.14867687300006,34.91742305200006],[75.15308400000004,34.93123300000008],[75.21278427100003,34.94739548500007],[75.19558288600007,34.97325633200006],[75.22853059300007,35.00867657600003],[75.22198664000007,35.025794473000076],[75.19632163900008,35.03156992900006],[75.21165366100007,35.06930853000006],[75.19298640300008,35.10671158200006],[75.21677599900005,35.11023000000006],[75.21864396700005,35.13867998400008],[75.24643522600007,35.15948889300006],[75.23706212900004,35.19715009400005],[75.21048173600008,35.189956118000055],[75.17121500000007,35.227824000000055],[75.16361960300003,35.24808058200006],[75.17847677200007,35.25483058100008],[75.17947679700006,35.290874717000065],[75.16758186900006,35.35026841000007],[75.13867141700007,35.35050635500005],[75.10060004100006,35.38286702500005],[75.08572840900007,35.41463283000007],[75.02029323200003,35.440331008000044],[75.01053800100004,35.47860500000007],[74.97853369100005,35.475784978000036],[74.95305874100006,35.510253987000056],[74.90800250200004,35.523582400000066],[74.86383375600008,35.55763843700004],[74.86948497600008,35.57548439400006],[74.81666364300008,35.62785558200005],[74.71669931400004,35.67268416700006],[74.72674880500006,35.70736012500004],[74.81595663800005,35.75251292000007],[74.83497903000006,35.78128646000005],[74.88602041100006,35.81064401000003],[74.90283090300005,35.84140739800006],[74.93113777100007,35.84026952500005],[74.96633782000004,35.868330565000065],[75.00047867900008,35.87448516200004],[75.01103022000007,35.873530447000064]],[[75.66930987200004,35.08319612500003],[75.66936508000003,35.08327428800004],[75.66930987200004,35.08319612500003]]]}},{"type":"Feature","properties":{"name":"Ghizer"},"geometry":{"type":"Polygon","coordinates":[[[73.90525887200005,36.900924290000034],[73.92067163700005,36.897685497000055],[73.93359827100005,36.874779260000025],[73.96032141500007,36.871915167000054],[73.95009960300007,36.86086810100005],[73.96847034200005,36.83936241500004],[74.04610632500004,36.82626274200004],[74.06245103900005,36.79520062600005],[74.09773563800007,36.78758578000003],[74.11504315000008,36.74946411700006],[74.09546606100008,36.72262706600003],[74.18380355000005,36.726196257000026],[74.19809500000008,36.71911000000006],[74.18350611700004,36.68425825700007],[74.24700000000007,36.67501900000008],[74.31764823200007,36.62566402900006],[74.26619238700005,36.59026954700005],[74.22554400000007,36.59624000000008],[74.22159325800004,36.57846747800005],[74.18750757800007,36.56360768600007],[74.18397415800007,36.531361993000075],[74.12366909800005,36.521863945000064],[74.10839049900005,36.40358893400003],[74.07805237100007,36.375630267000076],[74.02838112200004,36.364625260000025],[74.04712958700003,36.35299949100005],[74.02878200000004,36.315792000000044],[74.04060500000008,36.23985000000005],[74.11911546500005,36.16866149400005],[74.12366644400004,36.14238069800007],[74.09324831500004,36.124109661000034],[74.09087332700005,36.09807557500005],[74.11979410200007,36.051749768000036],[74.09979081600005,36.055694274000075],[74.08720000000005,36.031439000000034],[74.07387991800005,35.99063250300003],[74.08411846600006,35.96438372500006],[74.04667307200003,35.945994179000024],[74.00386261900007,35.95116484300007],[73.99030844600003,35.90071445600006],[73.93600599400008,35.908657901000026],[73.94622689500005,35.85146853900005],[73.90861844600005,35.86064645000005],[73.88574236900007,35.83920442500005],[73.83133172800007,35.876938179000035],[73.80558445400004,35.86586432400003],[73.77578902000005,35.88048472100007],[73.75864846600007,35.85252541400007],[73.68006355800003,35.87853609500007],[73.64167380900005,35.87801483100003],[73.62190241500008,35.86034766500006],[73.54804745100006,35.88261245100006],[73.51841935300007,35.85537517900008],[73.49242997100004,35.87665819000006],[73.46876638600008,35.869680103000064],[73.40109415200004,35.88745571000004],[73.32991181000006,35.94911344700006],[73.28864583300003,35.92845594100004],[73.26172989800006,35.93538220500005],[73.26243676700005,35.91703920500004],[73.24951277800005,35.91303517600005],[73.26458160900006,35.887615192000055],[73.25989372600003,35.87100086200007],[73.20999708800008,35.84763711200003],[73.16871641400007,35.85412368400006],[73.14420635900007,35.839029878000076],[73.08628660300008,35.872712222000075],[73.00745905100007,35.82464364700007],[72.96302064500003,35.83561780700006],[72.90431301700005,35.81308829900007],[72.88031629700004,35.852514549000034],[72.82683207100007,35.88532745800006],[72.80256113800004,35.82771738100007],[72.74178152700006,35.81431734100005],[72.72371598100005,35.85404608500005],[72.69652772900008,35.85894915200004],[72.67158002900004,35.83859340300006],[72.61784543300007,35.85800367600007],[72.60795806100003,35.849359399000036],[72.60226438500007,35.860861605000025],[72.58296065900004,35.854688012000054],[72.56333003400005,35.87560227900008],[72.53187938200006,35.87381648300004],[72.51054662700005,35.896981020000055],[72.50842701800008,35.91956693800006],[72.58757739200007,36.024971332000064],[72.53854923100005,36.054965019000065],[72.51881322400004,36.09827813700008],[72.55556197100003,36.13455930200007],[72.53651417900005,36.173167754000076],[72.57601678500004,36.249409306000075],[72.61039642100008,36.26906446400005],[72.67451206700008,36.26273002000005],[72.71011444800007,36.27401942300003],[72.73405490500005,36.299293798000065],[72.75665807800004,36.29741283100003],[72.80084343800007,36.32865457500003],[72.80761542800008,36.350666217000025],[72.85314204100007,36.36421474500003],[72.87401814800006,36.38751461500004],[72.86059301000006,36.43782719700005],[72.94203779100008,36.46611259800005],[72.97948168900007,36.457668280000064],[72.98065169400007,36.512636110000074],[73.05056686400007,36.53170702600005],[73.05698631700005,36.56603850000005],[73.09551231700004,36.60568331500008],[73.06936150300004,36.621826482000074],[73.05962269900004,36.64468719000007],[73.07889813200006,36.673559769000065],[73.17648481300006,36.721908778000056],[73.18559479100003,36.707558662000054],[73.17821639900006,36.69404108800006],[73.19003954200008,36.69015342400007],[73.26115605600006,36.70803916300008],[73.30859776500006,36.703609623000034],[73.34324227600007,36.71748917700006],[73.35906436300007,36.73854477900005],[73.46165088900005,36.73629848400003],[73.52143242300008,36.71249868500007],[73.57981926600007,36.72488812100005],[73.59523442600005,36.694955864000065],[73.61863968500006,36.69276162700004],[73.63809805300008,36.699886477000064],[73.68585083400006,36.68921269600003],[73.71115835100005,36.714555534000056],[73.77707575900007,36.70141561500003],[73.82441233000003,36.71048458000007],[73.87910751600003,36.70164200100004],[73.88958968700007,36.72687004900007],[73.87154618300008,36.73612149500008],[73.88326468500003,36.751991615000065],[73.86804568900004,36.77686788600005],[73.83767150600005,36.79285003900003],[73.80899814300005,36.79138689200005],[73.78851385000007,36.823650988000054],[73.75635637000005,36.81953003500007],[73.70461237300003,36.83775507200005],[73.70458791300007,36.85800041600004],[73.68160212700008,36.87161984100004],[73.67653016200006,36.91307730300008],[73.71830292300007,36.903637856000046],[73.75246792200005,36.91156120000005],[73.80645157700008,36.89139972100003],[73.82528300100006,36.89944375500005],[73.83615031200003,36.92654440800004],[73.90239475000004,36.90283119700007],[73.90525887200005,36.900924290000034]]]}},{"type":"Feature","properties":{"name":"Gilgit"},"geometry":{"type":"Polygon","coordinates":[[[74.89769484900006,35.827442000000076],[74.83497903000006,35.78128646000005],[74.81595663800005,35.75251292000007],[74.74146410700007,35.71763331300008],[74.74144023100007,35.74561585600003],[74.75898875600006,35.76524640900004],[74.72894806100004,35.791717912000024],[74.74099408200004,35.848081396000055],[74.65384632200005,35.826368814000034],[74.62335947800005,35.78814872100003],[74.65221044300006,35.77104634500006],[74.62454920900007,35.739518487000055],[74.62871326500004,35.72107766400006],[74.65042584700007,35.70843677800008],[74.63999206100004,35.67530063700008],[74.61337993700005,35.65194607700005],[74.61295867900003,35.62126516300003],[74.56371250400008,35.621084678000045],[74.53541916500006,35.57373750900007],[74.48748480300003,35.57736694400006],[74.46630239800004,35.55742317600004],[74.40685271800004,35.58274966100004],[74.39029237400007,35.56839137000003],[74.28029228200006,35.641636590000076],[74.23145828300005,35.62889786300008],[74.16958287200003,35.712065376000055],[74.13972446200006,35.71239789300006],[74.10226377000004,35.75172851600007],[74.06607341400007,35.75590934300004],[74.02289073100007,35.824990220000075],[73.96917868000008,35.81792383000004],[73.94572405900004,35.83235805500004],[73.93600599400008,35.908657901000026],[73.99030844600003,35.90071445600006],[74.00386261900007,35.95116484300007],[74.04667307200003,35.945994179000024],[74.08411846600006,35.96438372500006],[74.07387991800005,35.99063250300003],[74.08720000000005,36.031439000000034],[74.09979081600005,36.055694274000075],[74.11979410200007,36.051749768000036],[74.09087332700005,36.09807557500005],[74.09324831500004,36.124109661000034],[74.12366644400004,36.14238069800007],[74.11911546500005,36.16866149400005],[74.08601300000004,36.187985999000034],[74.07615600000008,36.21642600000007],[74.04139599900003,36.23832500000003],[74.03046600000005,36.263739000000044],[74.02912900000007,36.319109000000026],[74.04018300000007,36.343030000000056],[74.06585763400005,36.35183565700004],[74.13048600000008,36.31668900000005],[74.14898979900005,36.29329035300003],[74.16014377700003,36.23851382600003],[74.20135634600007,36.20916513000003],[74.28248721900007,36.18090516400008],[74.31815737900007,36.20435499600006],[74.37478478600008,36.19366552300005],[74.40888287300004,36.16491061500005],[74.48833049600006,36.143017377000035],[74.54948308300004,36.157493180000074],[74.66082412800006,36.121865944000035],[74.66672519200006,36.103782040000056],[74.72230940100008,36.085698137000065],[74.74281429000007,36.05666351900004],[74.85280999900004,36.04158000000007],[74.87221000000005,36.00636600000007],[74.93194495300008,35.968117617000075],[74.92567755300007,35.93890301500005],[74.96202222200003,35.92848925100003],[74.96956672500005,35.90832981400007],[74.96060169900005,35.859980422000035],[74.93113777100007,35.84026952500005],[74.90283090300005,35.84140739800006],[74.89753826900005,35.82798501600007],[74.89769484900006,35.827442000000076]]]}}]};
+
+
+// ═══════════════════════════════════════════
+// CONSTANTS (#3 classification, #9 categories, #10 GL=Gilgit)
+// ═══════════════════════════════════════════
+const DISTRICT_MAP={AT:'Astore',GZ:'Ghizer',DM:'Diamer',HN:'Hunza',GL:'Gilgit',SD:'Skardu',SS:'Shigar',NG:'Nagar',GN:'Ghanche',RG:'Kharmang'};
+const NAME_DISTRICT_RULES=[
+  {keys:['kharmang','karmang','katisho'],d:'Kharmang'},
+  {keys:['nasirabad','nasirabab','hunza','ganish','aliabad'],d:'Hunza'},
+  {keys:['navttc'],d:'Gilgit'},
+  {keys:['astore','astor'],d:'Astore'},
+  {keys:['ghizer','gahkuch','yasin','ishkoman'],d:'Ghizer'},
+  {keys:['diamer','diamir','darel','tangir'],d:'Diamer'},
+  {keys:['skardu'],d:'Skardu'},
+  {keys:['shigar'],d:'Shigar'},
+  {keys:['nagar'],d:'Nagar'},
+  {keys:['ghanche'],d:'Ghanche'},
+];
+// Classification keywords (#3)
+const COLLEGE_KEYS=['college of education','college'];
+const SCHOOL_KEYS=['school','h/s','h/school','primary school','middle school','elementary','govt. boys','govt. girls','govt boys','govt girls'];
+const OFFICE_KEYS=['director','directorate','office','engineer','board','center','navttc','planning','examination'];
+const DISTRICT_COLORS={Astore:'#1a56db',Ghizer:'#059669',Diamer:'#d97706',Hunza:'#7c3aed',Gilgit:'#0891b2',Skardu:'#dc2626',Shigar:'#db2777',Nagar:'#ea580c',Ghanche:'#65a30d',Kharmang:'#0d9488'};
+const CHART_PALETTE=['#1a56db','#059669','#d97706','#7c3aed','#dc2626','#0891b2','#db2777','#ea580c','#65a30d','#0d9488'];
+const TARGET_PCT=87;
+
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+let allSheetData={},filteredData=[],tableData=[];
+let tablePage=1,tablePageSize=25,tableSort={col:null,dir:-1};
+let charts={},filterTimer=null,drillRows=[],currentCategory='all';
+let distSort={col:'pct',dir:-1},trendSort={col:'date',dir:1},attSort={col:'pct',dir:-1};
+
+// ═══════════════════════════════════════════
+// DARK MODE (#2) - init from localStorage
+// ═══════════════════════════════════════════
+(function(){
+  const s=localStorage.getItem('emisTheme')||'light';
+  document.documentElement.setAttribute('data-theme',s);
+  const t=document.getElementById('dmThumb'),l=document.getElementById('dmLabel');
+  if(t)t.textContent=s==='dark'?'🌙':'☀️';
+  if(l)l.textContent=s==='dark'?'Dark':'Light';
+})();
+function toggleDarkMode(){
+  const dark=document.documentElement.getAttribute('data-theme')==='dark';
+  const next=dark?'light':'dark';
+  document.documentElement.setAttribute('data-theme',next);
+  document.getElementById('dmThumb').textContent=next==='dark'?'🌙':'☀️';
+  document.getElementById('dmLabel').textContent=next==='dark'?'Dark':'Light';
+  localStorage.setItem('emisTheme',next);
+  if(filteredData.length) setTimeout(()=>{renderOvCharts();renderDistrictCharts();},80);
+}
+function isDark(){return document.documentElement.getAttribute('data-theme')==='dark';}
+function cT(){return isDark()?'#94a3b8':'#475569';}
+function cG(){return isDark()?'#263347':'#f1f5f9';}
+
+// ═══════════════════════════════════════════
+// CLOCK
+// ═══════════════════════════════════════════
+setInterval(()=>{const e=document.getElementById('liveClock');if(e)e.textContent=new Date().toLocaleTimeString('en-PK',{hour:'2-digit',minute:'2-digit',second:'2-digit'});},1000);
+
+// ═══════════════════════════════════════════
+// CHARTJS DATALABELS REGISTRATION (#8)
+// ═══════════════════════════════════════════
+if(typeof ChartDataLabels!=='undefined')Chart.register(ChartDataLabels);
+
+// ═══════════════════════════════════════════
+// DDO CLASSIFICATION (#3)
+// ═══════════════════════════════════════════
+function classifyDDO(name){
+  const l=name.toLowerCase();
+  if(COLLEGE_KEYS.some(k=>l.includes(k)))return'college';
+  if(SCHOOL_KEYS.some(k=>l.includes(k)))return'school';
+  if(OFFICE_KEYS.some(k=>l.includes(k)))return'office';
+  return'school';
+}
+function getDistrict(office){
+  if(!office)return'Gilgit';
+  const pfx=office.substring(0,2).toUpperCase();
+  if(DISTRICT_MAP[pfx])return DISTRICT_MAP[pfx];
+  const l=office.toLowerCase();
+  for(let i=0;i<NAME_DISTRICT_RULES.length;i++){
+    const r=NAME_DISTRICT_RULES[i];
+    for(let j=0;j<r.keys.length;j++){if(l.indexOf(r.keys[j])>=0)return r.d;}
+  }
+  return'Gilgit';
+}
+
+// ═══════════════════════════════════════════
+// UPLOAD — SINGLE PERSISTENT LISTENER (bug fix)
+// ═══════════════════════════════════════════
+document.getElementById('excelUpload').addEventListener('change',function(e){
+  const file=e.target.files[0];this.value='';
+  if(!file)return;
+  if(!/\.(xlsx|xls)$/i.test(file.name)){alert('Please upload an Excel file (.xlsx or .xls)');return;}
+  if(typeof XLSX==='undefined'){alert('Excel library still loading. Wait a moment and try again.\nIf this repeats, press Ctrl+F5 to hard refresh.');return;}
+  processFile(file);
+});
+function handleDrop(e){
+  e.preventDefault();document.getElementById('uploadPanel').classList.remove('dragover');
+  const f=e.dataTransfer.files[0];if(f)processFile(f);
+}
+function setUploading(on){
+  const t=document.getElementById('uploadBtnText'),sp=document.getElementById('uploadSpinner'),ic=document.getElementById('uploadBtnIcon');
+  if(t)t.textContent=on?'Processing...':'Choose Excel File (.xlsx)';
+  if(sp)sp.style.display=on?'block':'none';
+  if(ic)ic.style.display=on?'none':'inline';
+}
+function processFile(file){
+  setUploading(true);
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    try{
+      allSheetData={};filteredData=[];tableData=[];destroyAllCharts();
+      const wb=XLSX.read(ev.target.result,{type:'array'});
+      wb.SheetNames.forEach(sn=>{
+        try{
+          const raw=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:null});
+          if(!raw.length)return;
+          const rows=raw.map(r=>{
+            const office=sv(r['Office']||r['Offices']||'').trim();
+            if(!office||/^(grand total|office|offices)$/i.test(office))return null;
+            const total=ni(r['Total Employees']||r['Total']);
+            const checkedIn=ni(r['Checked In']||r['CheckedIn']);
+            const working=ni(r['Working Shifts']||r['Shifts'])||total||1;
+            const leaves=ni(r['Leaves']||r['Leave']);
+            const absentRaw=ni(r['Absent']);
+            const holidays=ni(r['Holidays']);
+            const progressRaw=parseFloat(r['Progress']||r['Compliance']||0)||0;
+            let present,absent;
+            if(checkedIn>0){present=checkedIn;absent=absentRaw>0?absentRaw:Math.max(0,working-checkedIn-leaves-holidays);}
+            else{present=absentRaw>0?Math.max(0,working-absentRaw-leaves-holidays):Math.round(progressRaw*working);absent=absentRaw>0?absentRaw:Math.max(0,working-present-leaves-holidays);}
+            present=Math.max(0,present);absent=Math.max(0,absent);
+            const pct=working>0?Math.min(1,Math.max(0,present/working)):Math.min(1,Math.max(0,progressRaw));
+            return{office,dept:sv(r['Department']||'').trim(),district:getDistrict(office),
+              category:classifyDDO(office),total,present,absent,leaves,holidays,working,
+              pct,absentPct:working>0?Math.min(1,Math.max(0,absent/working)):0,date:sn};
+          }).filter(Boolean);
+          if(rows.length>0)allSheetData[sn]=rows;
+        }catch(err){console.warn('Sheet '+sn+':',err.message);}
+      });
+      if(!Object.keys(allSheetData).length){alert('No valid data found. Check file format.');setUploading(false);return;}
+      initDashboard();
+    }catch(err){alert('Error reading file: '+err.message);}
+    finally{setUploading(false);}
+  };
+  reader.onerror=()=>{alert('Could not read file.');setUploading(false);};
+  reader.readAsArrayBuffer(file);
+}
+function ni(v){return parseInt(v)||0;}
+function sv(v){return v==null?'':String(v);}
+
+// ═══════════════════════════════════════════
+// INIT DASHBOARD
+// ═══════════════════════════════════════════
+function initDashboard(){
+  const dates=Object.keys(allSheetData).sort();
+  const allRows=Object.values(allSheetData).flat();
+  // ★ Never rebuild upload panel innerHTML
+  document.getElementById('uploadPanel').style.display='none';
+  const sr=document.getElementById('uploadStatusRow');sr.style.display='flex';
+  document.getElementById('uploadStatusText').innerHTML='✅ Loaded: <strong>'+dates.length+' date(s)</strong> — '+dates.join(', ')+' · '+allRows.length+' records';
+  ['dateSelect','dateFrom','dateTo','rptAttDate','rptDistrictDate','mapDate'].forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    while(el.options.length>1)el.remove(1);
+    dates.forEach(d=>el.add(new Option(d,d)));
+  });
+  const districts=[...new Set(allRows.map(r=>r.district))].sort();
+  ['districtFilter','explorerDistrict','trendDistrict'].forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    while(el.options.length>1)el.remove(1);
+    districts.forEach(d=>el.add(new Option(d,d)));
+  });
+  document.getElementById('filterBar').style.display='flex';
+  document.getElementById('dataStatus').textContent=dates.length+' date(s) · '+allRows.length+' records';
+  if(dates.length>=2){document.getElementById('trendEmpty').style.display='none';document.getElementById('trendContent').style.display='block';}
+  applyFilters();
+}
+
+// ═══════════════════════════════════════════
+// CATEGORY TOGGLE (#9)
+// ═══════════════════════════════════════════
+function setCategory(cat){
+  currentCategory=cat;
+  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.toggle('active',b.dataset.cat===cat));
+  applyFilters();
+}
+
+// ═══════════════════════════════════════════
+// FILTERS
+// ═══════════════════════════════════════════
+function debounceFilter(){clearTimeout(filterTimer);filterTimer=setTimeout(applyFilters,280);}
+function applyFilters(){
+  const dv=document.getElementById('dateSelect').value;
+  const df=document.getElementById('dateFrom').value;
+  const dt=document.getElementById('dateTo').value;
+  const dv2=document.getElementById('districtFilter').value;
+  const sv2=document.getElementById('globalSearch').value.toLowerCase().trim();
+  const dates=Object.keys(allSheetData).sort();
+  let data=[];
+  if(df&&dt&&df<=dt){
+    const map={};
+    dates.filter(d=>d>=df&&d<=dt).forEach(d=>(allSheetData[d]||[]).forEach(r=>{
+      if(!map[r.office])map[r.office]={...r,total:0,present:0,absent:0,leaves:0,holidays:0,working:0};
+      const m=map[r.office];m.total+=r.total;m.present+=r.present;m.absent+=r.absent;m.leaves+=r.leaves;m.holidays+=r.holidays;m.working+=r.working;
+    }));
+    data=Object.values(map).map(r=>{r.pct=r.working>0?r.present/r.working:0;r.absentPct=r.working>0?r.absent/r.working:0;return r;});
+  } else if(dv==='all'){
+    if(dates.length===1){data=allSheetData[dates[0]]||[];}
+    else{
+      const map={};
+      Object.values(allSheetData).flat().forEach(r=>{
+        if(!map[r.office])map[r.office]={...r,total:0,present:0,absent:0,leaves:0,holidays:0,working:0};
+        const m=map[r.office];m.total+=r.total;m.present+=r.present;m.absent+=r.absent;m.leaves+=r.leaves;m.holidays+=r.holidays;m.working+=r.working;
+      });
+      data=Object.values(map).map(r=>{r.pct=r.working>0?r.present/r.working:0;r.absentPct=r.working>0?r.absent/r.working:0;return r;});
+    }
+  } else{data=allSheetData[dv]||[];}
+  if(currentCategory!=='all')data=data.filter(r=>r.category===currentCategory);
+  if(dv2!=='all')data=data.filter(r=>r.district===dv2);
+  if(sv2)data=data.filter(r=>r.office.toLowerCase().includes(sv2)||r.district.toLowerCase().includes(sv2));
+  filteredData=[...data];tableData=[...data];tablePage=1;
+  renderOverview();renderDistrictTab();renderExplorer();
+  renderHeatmap();renderDistrictReport();renderAttReport();
+  document.getElementById('fullDataCount').textContent=filteredData.length;
+}
+function resetFilters(){
+  ['dateSelect','dateFrom','dateTo','districtFilter'].forEach(id=>{const e=document.getElementById(id);if(e)e.value=e.options[0].value;});
+  document.getElementById('globalSearch').value='';setCategory('all');
+}
+
+// ═══════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════
+function fmt(v){return(v||0).toLocaleString();}
+function pctStr(p){return(p*100).toFixed(1)+'%';}
+function nowStr(){return new Date().toLocaleString('en-PK',{dateStyle:'long',timeStyle:'medium'});}
+function nowFile(){const d=new Date();return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate())+'_'+p2(d.getHours())+'h'+p2(d.getMinutes())+'m';}
+function p2(v){return String(v).padStart(2,'0');}
+function getActiveFiltersLabel(){
+  const catMap={all:'All Categories',school:'Schools',office:'Offices',college:'Colleges of Education'};
+  const distVal=document.getElementById('districtFilter')?.value||'all';
+  const dateVal=document.getElementById('dateSelect')?.value||'all';
+  const df=document.getElementById('dateFrom')?.value||'';
+  const dt=document.getElementById('dateTo')?.value||'';
+  let parts=[];
+  if(currentCategory!=='all')parts.push(catMap[currentCategory]||currentCategory);
+  if(distVal!=='all')parts.push('District: '+distVal);
+  let period='';
+  if(df&&dt&&df<=dt)period=df+' to '+dt;
+  else if(dateVal!=='all')period=dateVal;
+  else{const dates=Object.keys(allSheetData).sort();period=dates.length===1?dates[0]:(dates.length?dates[0]+' – '+dates[dates.length-1]:'All Dates');}
+  parts.push(period);
+  return parts.join(' | ');
+}
+function getPeriod(){
+  const dv=document.getElementById('dateSelect')?.value;
+  const df=document.getElementById('dateFrom')?.value;
+  const dt=document.getElementById('dateTo')?.value;
+  if(df&&dt&&df<=dt)return df+' to '+dt;
+  if(dv&&dv!=='all')return dv;
+  const dates=Object.keys(allSheetData).sort();
+  return dates.length===1?dates[0]:(dates.length?dates[0]+' — '+dates[dates.length-1]:'—');
+}
+function pctColor(p){if(p>=0.87)return'#065f46';if(p>=0.76)return'#1e40af';if(p>=0.6)return'#92400e';if(p>0)return'#991b1b';return'#450a0a';}
+function pctBadge(p){const s=pctStr(p);if(p>=0.95)return'<span class="badge b-green">'+s+'</span>';if(p>=0.87)return'<span class="badge b-blue">'+s+'</span>';if(p>=0.75)return'<span class="badge b-orange">'+s+'</span>';return'<span class="badge b-red">'+s+'</span>';}
+function pctBar(p){const c=pctColor(p);return'<div class="pct-bar"><div class="pct-track"><div class="pct-fill" style="width:'+Math.min(p*100,100).toFixed(1)+'%;background:'+c+'"></div></div><span style="font-size:10px;min-width:36px;text-align:right">'+pctStr(p)+'</span></div>';}
+function trafficLight(p){const[dot,lbl]=p>=0.87?['#059669','On Target']:p>=0.76?['#d97706','Needs Attention']:['#dc2626','Critical'];return'<span class="tl"><span class="tl-dot" style="background:'+dot+'"></span>'+lbl+'</span>';}
+function catBadge(cat){return{school:'<span class="badge b-blue">School</span>',office:'<span class="badge b-gray">Office</span>',college:'<span class="badge b-purple">College of Education</span>'}[cat]||'<span class="badge b-gray">—</span>';}
+function getDistrictAgg(data){
+  const m={};
+  data.forEach(r=>{
+    if(!m[r.district])m[r.district]={district:r.district,total:0,present:0,absent:0,leaves:0,working:0,count:0};
+    const d=m[r.district];d.total+=r.total;d.present+=r.present;d.absent+=r.absent;d.leaves+=r.leaves;d.working+=r.working;d.count++;
+  });
+  return Object.values(m).map(d=>{d.pct=d.working>0?d.present/d.working:0;d.absentPct=d.working>0?d.absent/d.working:0;return d;}).sort((a,b)=>b.pct-a.pct);
+}
+
+// ═══════════════════════════════════════════
+// CHART HELPERS (#6 SVG, #8 datalabels)
+// ═══════════════════════════════════════════
+function destroyChart(id){
+  if(charts[id]){try{charts[id].destroy();}catch(e){}delete charts[id];}
+  const old=document.getElementById(id);
+  if(old&&old.parentNode){const c=document.createElement('canvas');c.id=id;old.parentNode.replaceChild(c,old);}
+}
+function destroyAllCharts(){Object.keys(charts).forEach(destroyChart);}
+function exportChartPNG(id,name){const c=document.getElementById(id);if(!c)return;const a=document.createElement('a');a.href=c.toDataURL('image/png');a.download='EMIS_SEDGB_'+name+'_'+nowFile()+'.png';a.click();}
+function exportChartSVG(id,name){ // (#6)
+  const c=document.getElementById(id);if(!c)return;
+  const w=c.width||800,h=c.height||400;
+  const img=c.toDataURL('image/png');
+  const svgStr='<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="'+w+'" height="'+(h+18)+'" viewBox="0 0 '+w+' '+(h+18)+'">\n<rect width="'+w+'" height="'+(h+18)+'" fill="'+(isDark()?'#1e293b':'#ffffff')+'"/>\n<image href="'+img+'" x="0" y="0" width="'+w+'" height="'+h+'"/>\n<text x="8" y="'+(h+13)+'" font-family="IBM Plex Sans,sans-serif" font-size="10" fill="#94a3b8">EMIS SEDGB | '+nowStr()+'</text>\n</svg>';
+  const blob=new Blob([svgStr],{type:'image/svg+xml'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='EMIS_SEDGB_'+name+'_'+nowFile()+'.svg';a.click();URL.revokeObjectURL(url);
+}
+// Datalabels defaults (#8)
+function dlTop(fmtFn){return{display:true,anchor:'end',align:'top',color:()=>isDark()?'#f1f5f9':'#0f172a',font:{size:10,weight:'bold'},formatter:fmtFn||(v=>v)};}
+function dlEnd(fmtFn){return{display:true,anchor:'end',align:'right',color:()=>isDark()?'#f1f5f9':'#0f172a',font:{size:9,weight:'bold'},formatter:fmtFn||(v=>v)};}
+
+// ═══════════════════════════════════════════
+// OVERVIEW (#1 emp bar replaces Top15, #5 Period, #7 no Holiday)
+// ═══════════════════════════════════════════
+function renderOverview(){
+  if(!filteredData.length)return;
+  document.getElementById('ovEmpty').style.display='none';
+  document.getElementById('ovContent').style.display='block';
+  const d=filteredData;
+  const totW=d.reduce((s,r)=>s+r.working,0),totP=d.reduce((s,r)=>s+r.present,0);
+  const totA=d.reduce((s,r)=>s+r.absent,0),totL=d.reduce((s,r)=>s+r.leaves,0);
+  const totE=d.reduce((s,r)=>s+r.total,0),oPct=totW>0?totP/totW:0;
+  // ★ Banner always shows static totals from ALL data (not filtered)
+  const _allRows=Object.values(allSheetData).flat();
+  const _seen={};_allRows.forEach(r=>{_seen[r.office]=r;});
+  const _allDDOs=Object.values(_seen);
+  document.getElementById('b-inst').textContent=fmt(_allDDOs.length);
+  document.getElementById('b-emp').textContent=fmt(_allDDOs.reduce((s,r)=>s+r.total,0));
+  document.getElementById('b-schools').textContent=fmt(_allDDOs.filter(r=>r.category==='school').length);
+  document.getElementById('b-offices').textContent=fmt(_allDDOs.filter(r=>r.category==='office').length);
+  document.getElementById('b-colleges').textContent=fmt(_allDDOs.filter(r=>r.category==='college').length);
+  const hi=d.filter(r=>r.pct>=0.87).length,full=d.filter(r=>r.pct>=1).length,zero=d.filter(r=>r.pct===0).length;
+  const sc=d.filter(r=>r.category==='school').length,of=d.filter(r=>r.category==='office').length,co=d.filter(r=>r.category==='college').length;
+  document.getElementById('kpiGrid').innerHTML=[
+    {l:'Overall Attendance',v:pctStr(oPct),s:pctStr(totW>0?totA/totW:0)+' absence rate',c:'blue'},
+    {l:'Total DDOs',v:fmt(d.length),s:sc+' schools · '+of+' offices · '+co+' colleges',c:'teal'}, // ★ #4 DDO label
+    {l:'Total Employees',v:fmt(totE),s:'Across all records',c:'blue'},
+    {l:'Total Present',v:fmt(totP),s:'Avg '+(totP/Math.max(d.length,1)).toFixed(1)+'/DDO',c:'green'},
+    {l:'Total Absent',v:fmt(totA),s:pctStr(totW>0?totA/totW:0)+' of workforce',c:'red'},
+    {l:'On Leave',v:fmt(totL),s:pctStr(totW>0?totL/totW:0)+' of workforce',c:'orange'},
+    {l:'At/Above 87% Target',v:hi,s:((hi/Math.max(d.length,1))*100).toFixed(0)+'% of DDOs',c:'green'},
+    {l:'Full Compliance 100%',v:full,s:((full/Math.max(d.length,1))*100).toFixed(0)+'% of DDOs',c:'teal'},
+    {l:'Zero Attendance',v:zero,s:zero>0?'⚠️ Needs urgent attention':'All DDOs reported',c:zero>0?'red':'green'},
+    {l:'Active Districts',v:[...new Set(d.map(r=>r.district))].length,s:'Out of 10 districts',c:'purple'},
+  ].map((k,i)=>'<div class="kpi-card '+k.c+' fade-in" style="animation-delay:'+i*.03+'s" onclick="showKpiDrill(\''+k.l+'\')"><div class="kpi-label">'+k.l+'</div><div class="kpi-value">'+k.v+'</div><div class="kpi-sub">'+k.s+'</div></div>').join('');
+  renderOvCharts();renderMainTable();
+}
+
+function renderOvCharts(){
+  if(!filteredData.length)return;
+  renderDistrictAttChart();renderDonutChart();renderEmpBarChart();renderEmpPieChart();
+}
+
+function renderDistrictAttChart(){
+  destroyChart('chartDistrict');
+  const agg=getDistrictAgg(filteredData);
+  charts['chartDistrict']=new Chart(document.getElementById('chartDistrict').getContext('2d'),{type:'bar',
+    data:{labels:agg.map(d=>d.district),datasets:[
+      {label:'Attendance %',data:agg.map(d=>+(d.pct*100).toFixed(1)),backgroundColor:agg.map(d=>DISTRICT_COLORS[d.district]||'#888'),borderRadius:5,datalabels:dlTop(v=>v+'%')}, // ★ #8
+      {label:'Absence %',data:agg.map(d=>+(d.absentPct*100).toFixed(1)),backgroundColor:agg.map(d=>(DISTRICT_COLORS[d.district]||'#888')+'66'),borderRadius:5,datalabels:{display:false}}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      onClick:(e,els)=>{if(els.length)showDistrictDrill(agg[els[0].index].district);},
+      plugins:{legend:{position:'top',labels:{color:cT()}},datalabels:{},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+'%'}}},
+      scales:{y:{beginAtZero:true,max:108,ticks:{callback:v=>v+'%',color:cT()},grid:{color:cG()}},x:{grid:{display:false},ticks:{color:cT()}}}}
+  });
+}
+
+function renderDonutChart(){ // ★ #7 Holiday removed — only Present/Absent/Leave
+  destroyChart('chartDonut');
+  const d=filteredData;
+  const totW=d.reduce((s,r)=>s+r.working,0);
+  const p=d.reduce((s,r)=>s+r.present,0),a=d.reduce((s,r)=>s+r.absent,0),l=d.reduce((s,r)=>s+r.leaves,0);
+  charts['chartDonut']=new Chart(document.getElementById('chartDonut').getContext('2d'),{type:'doughnut',
+    data:{labels:['Present','Absent','Leave'],datasets:[{data:[p,a,l],backgroundColor:['#059669','#dc2626','#d97706'],borderWidth:2,hoverOffset:8}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
+      plugins:{legend:{position:'right',labels:{color:cT()}},
+        datalabels:{display:true,color:'#fff',font:{size:10,weight:'bold'},formatter:(v,ctx)=>{const tot=ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);return tot>0?((v/tot)*100).toFixed(0)+'%':'';}},
+        tooltip:{callbacks:{label:c=>c.label+': '+fmt(c.parsed)+' ('+(totW>0?pctStr(c.parsed/totW):'—')+')'}}}}
+  });
+}
+
+function renderEmpBarChart(){ // ★ #1 Replaces Top 15 Institutions chart
+  destroyChart('chartEmpBar');
+  const agg=getDistrictAgg(filteredData).sort((a,b)=>b.total-a.total);
+  charts['chartEmpBar']=new Chart(document.getElementById('chartEmpBar').getContext('2d'),{type:'bar',
+    data:{labels:agg.map(d=>d.district),datasets:[{
+      label:'Total Employees',data:agg.map(d=>d.total),
+      backgroundColor:agg.map(d=>DISTRICT_COLORS[d.district]||'#888'),borderRadius:6,
+      datalabels:dlTop(v=>fmt(v)) // ★ #8 values at bar tips
+    }]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},datalabels:{},tooltip:{callbacks:{label:c=>fmt(c.parsed.y)+' employees'}}},
+      scales:{y:{beginAtZero:true,ticks:{color:cT()},grid:{color:cG()}},x:{grid:{display:false},ticks:{color:cT()}}}}
+  });
+}
+
+function renderEmpPieChart(){
+  destroyChart('chartEmpPie');
+  const agg=getDistrictAgg(filteredData).sort((a,b)=>b.total-a.total);
+  charts['chartEmpPie']=new Chart(document.getElementById('chartEmpPie').getContext('2d'),{type:'pie',
+    data:{labels:agg.map(d=>d.district),datasets:[{data:agg.map(d=>d.total),backgroundColor:agg.map(d=>DISTRICT_COLORS[d.district]||'#888'),borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'right',labels:{color:cT()}},datalabels:{display:false},tooltip:{callbacks:{label:c=>c.label+': '+fmt(c.parsed)+' employees'}}}}
+  });
+}
+
+// ═══════════════════════════════════════════
+// MAIN TABLE (#4 DDO label)
+// ═══════════════════════════════════════════
+function renderMainTable(){
+  const thead=document.querySelector('#mainTable thead');
+  const tbody=document.querySelector('#mainTable tbody');
+  const tfoot=document.querySelector('#mainTable tfoot');
+  const _mainCols=[['#',null],['District','district'],['DDO Name','office'],['Category','category'],['Total','total'],['Present','present'],['Absent','absent'],['Leaves','leaves'],['Att %','pct'],['Abs %','absentPct'],['Detail',null]];
+  thead.innerHTML='<tr>'+_mainCols.map(function(p){var cls=p[1]&&tableSort.col===p[1]?(tableSort.dir>0?'sort-asc':'sort-desc'):'';var da=p[1]?' data-sk="'+p[1]+'"':'';return'<th'+da+' class="'+cls+'">'+p[0]+'</th>';}).join('')+'</tr>';
+  thead.querySelectorAll('th[data-sk]').forEach(function(t){t.onclick=function(){sortMainTable(this.dataset.sk);};});
+  let data=[...tableData];
+  const s=document.getElementById('tableSearch').value.toLowerCase();
+  if(s)data=data.filter(r=>r.office.toLowerCase().includes(s)||r.district.toLowerCase().includes(s));
+  if(tableSort.col&&tableSort.col!=='idx'){data.sort((a,b)=>{const av=a[tableSort.col],bv=b[tableSort.col];return tableSort.dir*(typeof av==='string'?av.localeCompare(bv):av-bv);});}
+  const start=(tablePage-1)*tablePageSize;
+  const page=data.slice(start,start+tablePageSize);
+  tbody.innerHTML=page.map((r,i)=>{
+    const ri=filteredData.indexOf(r);
+    return'<tr><td>'+(start+i+1)+'</td>'
+    +'<td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+(DISTRICT_COLORS[r.district]||'#888')+';margin-right:5px;vertical-align:middle"></span>'+r.district+'</td>'
+    +'<td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+r.office+'">'+r.office+'</td>'
+    +'<td>'+catBadge(r.category)+'</td><td>'+fmt(r.total)+'</td><td>'+fmt(r.present)+'</td>'
+    +'<td style="color:'+(r.absent>0?'#dc2626':'inherit')+';font-weight:'+(r.absent>0?700:400)+'">'+fmt(r.absent)+'</td>'
+    +'<td>'+fmt(r.leaves)+'</td><td>'+pctBar(r.pct)+'</td><td>'+pctBadge(r.absentPct)+'</td>'
+    +'<td><button class="btn btn-ghost btn-sm" data-idx="'+ri+'" onclick="showInstDrillByIdx(this)">View</button></td></tr>';
+  }).join('');
+  const totW=data.reduce((s,r)=>s+r.working,0),totP=data.reduce((s,r)=>s+r.present,0);
+  tfoot.innerHTML='<td colspan="4">TOTAL — '+data.length+' DDOs</td><td>'+fmt(data.reduce((s,r)=>s+r.total,0))+'</td><td>'+fmt(totP)+'</td><td style="color:#dc2626">'+fmt(data.reduce((s,r)=>s+r.absent,0))+'</td><td>'+fmt(data.reduce((s,r)=>s+r.leaves,0))+'</td><td>'+pctBar(totW>0?totP/totW:0)+'</td><td>'+pctBadge(totW>0?data.reduce((s,r)=>s+r.absent,0)/totW:0)+'</td><td></td>';
+  renderPagination(data.length);
+}
+function sortMainTable(col){if(tableSort.col===col)tableSort.dir*=-1;else{tableSort.col=col;tableSort.dir=-1;}tablePage=1;renderMainTable();}
+function showInstDrillByIdx(btn){const idx=parseInt(btn.getAttribute('data-idx'));if(idx>=0&&idx<filteredData.length)showInstDrill(filteredData[idx]);}
+function filterMainTable(){tablePage=1;renderMainTable();}
+function changePageSize(){tablePageSize=parseInt(document.getElementById('tablePageSize').value);tablePage=1;renderMainTable();}
+function renderPagination(total){
+  const pages=Math.ceil(total/tablePageSize),pg=document.getElementById('mainPagination');
+  if(pages<=1){pg.innerHTML='';return;}
+  let h='<span class="page-info">'+(((tablePage-1)*tablePageSize)+1)+'–'+Math.min(tablePage*tablePageSize,total)+' of '+total+'</span>';
+  h+='<button class="page-btn" onclick="gotoPage(1)">«</button><button class="page-btn" onclick="gotoPage('+Math.max(1,tablePage-1)+')">‹</button>';
+  for(let p=Math.max(1,tablePage-2);p<=Math.min(pages,tablePage+2);p++)h+='<button class="page-btn'+(p===tablePage?' active':'')+'" onclick="gotoPage('+p+')">'+p+'</button>';
+  h+='<button class="page-btn" onclick="gotoPage('+Math.min(pages,tablePage+1)+')">›</button><button class="page-btn" onclick="gotoPage('+pages+')">»</button>';
+  pg.innerHTML=h;
+}
+function gotoPage(p){tablePage=p;renderMainTable();}
+
+// ═══════════════════════════════════════════
+// DISTRICTS TAB (#8 bar labels on all charts)
+// ═══════════════════════════════════════════
+function renderDistrictTab(){
+  if(!filteredData.length)return;
+  document.getElementById('distEmpty').style.display='none';
+  document.getElementById('distContent').style.display='block';
+  renderDistrictCharts();setTimeout(renderMiniMap,80);
+}
+function renderDistrictCharts(){
+  if(!filteredData.length)return;
+  let agg=getDistrictAgg(filteredData);
+  if(distSort.col){agg.sort((a,b)=>{const av=a[distSort.col],bv=b[distSort.col];return distSort.dir*(typeof av==='string'?av.localeCompare(bv):av-bv);});}
+  destroyChart('chartDistrictBar');
+  charts['chartDistrictBar']=new Chart(document.getElementById('chartDistrictBar').getContext('2d'),{type:'bar',
+    data:{labels:agg.map(d=>d.district),datasets:[
+      {label:'Total',data:agg.map(d=>d.total),backgroundColor:'#1e3a5f',borderRadius:3,datalabels:dlTop(v=>fmt(v))},
+      {label:'Present',data:agg.map(d=>d.present),backgroundColor:'#059669',borderRadius:3,datalabels:dlTop(v=>fmt(v))}, // ★ #8
+      {label:'Absent',data:agg.map(d=>d.absent),backgroundColor:'#991b1b',borderRadius:3,datalabels:dlTop(v=>fmt(v))},
+      {label:'Leave',data:agg.map(d=>d.leaves),backgroundColor:'#92400e',borderRadius:3,datalabels:dlTop(v=>fmt(v))},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{color:cT()}},datalabels:{}},
+      scales:{x:{grid:{display:false},ticks:{color:cT()}},y:{beginAtZero:true,grid:{color:cG()},ticks:{color:cT()}}}}
+  });
+  destroyChart('chartPresenceBar');
+  const aggS=[...agg].sort((a,b)=>b.pct-a.pct);
+  charts['chartPresenceBar']=new Chart(document.getElementById('chartPresenceBar').getContext('2d'),{type:'bar',
+    data:{labels:aggS.map(d=>d.district),datasets:[
+      {label:'Presence %',data:aggS.map(d=>+(d.pct*100).toFixed(1)),backgroundColor:aggS.map(d=>pctColor(d.pct)),borderRadius:6,barThickness:24,datalabels:dlEnd(v=>v+'%')}, // ★ #8
+      {label:'87% Target',data:aggS.map(()=>87),type:'line',borderColor:'#dc2626',borderDash:[7,4],borderWidth:2,pointRadius:0,fill:false,datalabels:{display:false}}
+    ]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top',labels:{color:cT()}},datalabels:{},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.x+'%'}}},
+      scales:{x:{beginAtZero:true,max:108,ticks:{callback:v=>v+'%',color:cT()},grid:{color:cG()}},y:{grid:{display:false},ticks:{color:cT()}}}}
+  });
+  destroyChart('chartAbsence');
+  charts['chartAbsence']=new Chart(document.getElementById('chartAbsence').getContext('2d'),{type:'bar',
+    data:{labels:agg.map(d=>d.district),datasets:[{label:'Absence %',data:agg.map(d=>+(d.absentPct*100).toFixed(1)),
+      backgroundColor:agg.map(d=>d.absentPct>0.3?'#dc2626':d.absentPct>0.15?'#d97706':'#059669'),borderRadius:5,
+      datalabels:dlTop(v=>v+'%')}]}, // ★ #8
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},datalabels:{},tooltip:{callbacks:{label:c=>'Absence: '+c.parsed.y+'%'}}},
+      scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'%',color:cT()},grid:{color:cG()}},x:{grid:{display:false},ticks:{color:cT()}}}}
+  });
+  let agg2=getDistrictAgg(filteredData);
+  if(distSort.col){agg2.sort((a,b)=>{const av=a[distSort.col],bv=b[distSort.col];return distSort.dir*(typeof av==='string'?av.localeCompare(bv):av-bv);});}
+  const dt=document.getElementById('districtTable');
+  const _distSortCols=['#','District','DDOs','Total Employees','Present','Absent','Attendance %','Absent %','Status'];
+  const _distSortKeys=[null,'district','count','total','present','absent','pct','absentPct',null];
+  dt.querySelector('thead').innerHTML='<tr>'+_distSortCols.map(function(c,i){var k=_distSortKeys[i];var cls=k&&distSort.col===k?(distSort.dir>0?'sort-asc':'sort-desc'):'';var da=k?' data-sk="'+k+'"':'';return'<th'+da+' class="'+cls+'">'+c+'</th>';}).join('')+'</tr>';
+  dt.querySelector('thead').querySelectorAll('th[data-sk]').forEach(function(t){t.onclick=function(){distSortBy(this.dataset.sk);};});
+  dt.querySelector('tbody').innerHTML=agg2.map((d,i)=>'<tr class="dist-row" style="cursor:pointer;'+(i%2!==0?'background:var(--surface-2)':'')+'" onclick="showDistrictDrill(\''+d.district+'\')" title="Click to drill into '+d.district+'">'
+    +'<td>'+(i+1)+'</td>'
+    +'<td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+(DISTRICT_COLORS[d.district]||'#888')+';margin-right:6px;vertical-align:middle"></span><strong>'+d.district+'</strong></td>'
+    +'<td>'+d.count+'</td><td>'+fmt(d.total)+'</td><td>'+fmt(d.present)+'</td>'
+    +'<td style="color:#dc2626;font-weight:700">'+fmt(d.absent)+'</td>'
+    +'<td>'+pctBar(d.pct)+'</td><td>'+pctBadge(d.absentPct)+'</td><td>'+trafficLight(d.pct)+'</td>'
+    +'</tr>').join('');
+  const tA={total:agg2.reduce((s,d)=>s+d.total,0),present:agg2.reduce((s,d)=>s+d.present,0),absent:agg2.reduce((s,d)=>s+d.absent,0),working:agg2.reduce((s,d)=>s+d.working,0)};
+  dt.querySelector('tfoot').innerHTML='<td colspan="2"><strong>Grand Total (GB)</strong></td><td>'+agg2.length+' districts</td><td><strong>'+fmt(tA.total)+'</strong></td><td><strong>'+fmt(tA.present)+'</strong></td><td style="color:#dc2626"><strong>'+fmt(tA.absent)+'</strong></td><td><strong>'+pctBar(tA.working>0?tA.present/tA.working:0)+'</strong></td><td><strong>'+pctBadge(tA.working>0?tA.absent/tA.working:0)+'</strong></td><td><strong>'+trafficLight(tA.working>0?tA.present/tA.working:0)+'</strong></td>';
+}
+
+// ═══════════════════════════════════════════
+// D3 GEO MAP SHARED RENDERER (#11)
+// ═══════════════════════════════════════════
+function buildDistMap(dateVal){
+  let rows=dateVal==='all'?Object.values(allSheetData).flat():(allSheetData[dateVal]||[]);
+  if(currentCategory!=='all')rows=rows.filter(r=>r.category===currentCategory);
+  const m={};
+  rows.forEach(r=>{
+    if(!m[r.district])m[r.district]={present:0,absent:0,working:0,total:0,count:0};
+    const d=m[r.district];d.present+=r.present;d.absent+=r.absent;d.working+=r.working;d.total+=r.total;d.count++;
+  });
+  return m;
+}
+
+function drawMap(svgId, ttId, legBarId, legLblId, metric, dateVal, height, onClickFn) {
+  const svgEl = document.getElementById(svgId);
+  if (!svgEl) return;
+  
+  const svg = d3.select('#' + svgId);
+  svg.selectAll('*').remove();
+  
+  const wrap = svgEl.parentElement;
+  const W = wrap.getBoundingClientRect().width || wrap.offsetWidth || wrap.parentElement?.offsetWidth || 760;
+  const H = height || 480;
+  
+  svg.attr('viewBox', '0 0 ' + W + ' ' + H);
+  
+  // ✅ FIX: Do NOT chain .translate() after fitSize()
+  const proj = d3.geoMercator().fitSize([W - 8, H - 18], GB_GEOJSON);
+  const path = d3.geoPath().projection(proj);
+  
+  const dd = buildDistMap(dateVal);
+  
+  let colorScale, lgBg, lgLbl;
+  if (metric === 'pct') {
+    colorScale = d3.scaleSequential(d3.interpolateRdYlGn).domain([0, 1]);
+    lgBg = 'linear-gradient(90deg,#d73027,#fee08b,#1a9850)';
+    lgLbl = 'Low attendance → High attendance';
+  } else if (metric === 'absent') {
+    const mx = Math.max(...Object.values(dd).map(d => d.absent), 1);
+    colorScale = d3.scaleSequential(d3.interpolateReds).domain([0, mx]);
+    lgBg = 'linear-gradient(90deg,#d1fae5,#fee2e2,#7f1d1d)';
+    lgLbl = 'Low absent (✅ good) → High absent (🔴 bad)';
+  } else {
+    const mx = Math.max(...Object.values(dd).map(d => d.present), 1);
+    colorScale = d3.scaleSequential(d3.interpolateBlues).domain([0, mx]);
+    lgBg = 'linear-gradient(90deg,#dbeafe,#1a56db)';
+    lgLbl = 'Low → High present count';
+  }
+  
+  const lb = document.getElementById(legBarId);
+  const ll = document.getElementById(legLblId);
+  if (lb && legBarId !== '_noleg') lb.style.background = lgBg;
+  if (ll && legLblId !== '_noleg') ll.textContent = lgLbl;
+  
+  const tt = document.getElementById(ttId);
+  
+  // Draw district shapes
+  svg.selectAll('path')
+    .data(GB_GEOJSON.features)
+    .enter()
+    .append('path')
+    .attr('d', path)
+    .attr('fill', feat => {
+      const n = feat.properties.name, d = dd[n];
+      if (!d) return isDark() ? '#334155' : '#e2e8f0';
+      const v = metric === 'pct' ? (d.working > 0 ? d.present / d.working : 0)
+              : metric === 'absent' ? d.absent
+              : d.present;
+      return colorScale(v);
+    })
+    .attr('stroke', '#fff')        // optional white borders for clarity
+    .attr('stroke-width', 0.8)
+    .on('mousemove', function(event, feat) {
+      const n = feat.properties.name, d = dd[n];
+      const pct = d && d.working > 0 ? ((d.present / d.working) * 100).toFixed(1) + '%' : '—';
+      if (tt) {
+        tt.style.opacity = '1';
+        tt.style.left = (event.clientX + 16) + 'px';
+        tt.style.top = (event.clientY - 10) + 'px';
+        tt.innerHTML = '<strong>' + n + '</strong>\nAttendance: ' + pct +
+                       '\nPresent: ' + fmt(d?.present || 0) +
+                       '\nAbsent: ' + fmt(d?.absent || 0) +
+                       '\nTotal Emp: ' + fmt(d?.total || 0) +
+                       '\nDDOs: ' + (d?.count || 0);
+      }
+    })
+    .on('mouseleave', () => { if (tt) tt.style.opacity = '0'; })
+    .on('click', (_, feat) => { if (onClickFn) onClickFn(feat.properties.name); });
+  
+  // 📌 District names + Attendance/Absence labels
+  svg.selectAll('text')
+    .data(GB_GEOJSON.features)
+    .enter()
+    .append('text')
+    .attr('transform', feat => 'translate(' + path.centroid(feat) + ')')
+    .attr('text-anchor', 'middle')
+    .attr('dy', '-0.4em')           // lift the name slightly
+    .attr('font-size', height > 350 ? 11 : 9)
+    .attr('font-weight', 'bold')
+    .attr('fill', isDark() ? 'rgba(255,255,255,.9)' : 'rgba(15,23,42,.85)')
+    .attr('pointer-events', 'none')
+    .text(feat => feat.properties.name)
+    // Add a second line (tspan) for percentages
+    .append('tspan')
+    .attr('x', 0)                   // reset to parent x
+    .attr('dy', '1.2em')            // move down
+    .attr('font-size', height > 350 ? 9 : 7)
+    .attr('font-weight', 'normal')
+    .attr('fill', isDark() ? 'rgba(255,255,255,.7)' : 'rgba(15,23,42,.7)')
+    .text(feat => {
+      const d = dd[feat.properties.name];
+      if (!d || d.working === 0) return 'Att: — | Abs: —';
+      const att = ((d.present / d.working) * 100).toFixed(1);
+      const abs = ((d.absent / d.working) * 100).toFixed(1);
+      return 'Att: ' + att + '% | Abs: ' + abs + '%';
+    });
+}
+function renderGeoMap(){ // Main heatmap tab map
+  const metric=document.getElementById('mapMetric').value;
+  const dateVal=document.getElementById('mapDate').value;
+  drawMap('geoMap','mapTooltip','mapLegBar','mapLegLabel',metric,dateVal,510,showDistrictDrill);
+}
+function trendSortBy(col){
+  if(trendSort.col===col)trendSort.dir*=-1;else{trendSort.col=col;trendSort.dir=1;}
+  renderTrends();
+}
+function distSortBy(col){
+  if(distSort.col===col)distSort.dir*=-1;else{distSort.col=col;distSort.dir=-1;}
+  renderDistrictTab();
+}
+function renderMiniMap(){ // Mini map in Districts tab
+  if(!filteredData.length)return;
+  const metric=document.getElementById('miniMapMetric').value;
+  const dateVal=document.getElementById('dateSelect')?.value||'all';
+  drawMap('miniGeoMap','miniMapTooltip','miniMapLegBar','miniMapLegLabel',metric,dateVal,292,showDistrictDrill);
+}
+
+// ═══════════════════════════════════════════
+// HEATMAP — SUB-TABS (map default, grid secondary)
+// ═══════════════════════════════════════════
+function switchHmTab(tab){
+  document.querySelectorAll('.sub-tab').forEach(t=>t.classList.toggle('active',t.dataset.hmtab===tab));
+  document.getElementById('hmMapPanel').style.display=tab==='map'?'block':'none';
+  document.getElementById('hmGridPanel').style.display=tab==='grid'?'block':'none';
+  if(tab==='map')renderGeoMap();else renderHeatmapGrid();
+}
+function renderHeatmap(){
+  if(!Object.keys(allSheetData).length)return;
+  document.getElementById('hmEmpty').style.display='none';
+  document.getElementById('hmContent').style.display='block';
+  renderGeoMap(); // map is default
+}
+function renderHeatmapGrid(){
+  const dates=Object.keys(allSheetData).sort();
+  if(!dates.length)return;
+  const metric=document.getElementById('heatmapMetric').value;
+  const districts=Object.keys(DISTRICT_MAP).map(k=>DISTRICT_MAP[k]);
+  const legend=document.getElementById('hmLegend');
+  if(metric==='absent')legend.innerHTML='<div style="width:100px;height:6px;background:linear-gradient(90deg,#d1fae5,#fef3c7,#fee2e2,#7f1d1d);border-radius:3px"></div><span>0 absent ✅ → High absent 🔴</span>';
+  else legend.innerHTML='<div style="width:100px;height:6px;background:linear-gradient(90deg,#7f1d1d,#fee2e2,#fef3c7,#d1fae5,#1a56db);border-radius:3px"></div><span>Low → High attendance</span>';
+  let html='<tr><th>District</th>'+dates.map(d=>'<th>'+d+'</th>').join('')+'</tr>';
+  districts.forEach(dist=>{
+    html+='<tr><td style="text-align:left;background:#1e3a5f;color:#fff;font-weight:700;padding:7px 11px">'+dist+'</td>';
+    dates.forEach(date=>{
+      let rows=(allSheetData[date]||[]).filter(r=>r.district===dist);
+      if(currentCategory!=='all')rows=rows.filter(r=>r.category===currentCategory);
+      const w=rows.reduce((s,r)=>s+r.working,0),p=rows.reduce((s,r)=>s+r.present,0),a=rows.reduce((s,r)=>s+r.absent,0);
+      let disp,bg,tc='#fff';
+      if(metric==='pct'){const v=w>0?p/w:null;disp=v!==null?pctStr(v):'—';bg=v!==null?hmPct(v):'#e2e8f0';tc=v!==null&&v>0.5?'#fff':'#0f172a';}
+      else if(metric==='absent'){disp=fmt(a);bg=hmAbsent(a,rows.length);}
+      else{disp=fmt(p);bg=rows.length?hmPct(w>0?p/w:0):'#e2e8f0';}
+      html+='<td style="background:'+bg+';color:'+tc+'" onclick="showHeatDrill(\''+dist+'\',\''+date+'\')">'+disp+'</td>';
+    });
+    html+='</tr>';
+  });
+  document.getElementById('heatmapTable').innerHTML=html;
+  const allRows=Object.values(allSheetData).flat();
+  const top=[...new Set(allRows.map(r=>r.office))].map(o=>{const rs=allRows.filter(r=>r.office===o);return{office:o,total:rs.reduce((s,r)=>s+r.total,0)};}).sort((a,b)=>b.total-a.total).slice(0,40).map(r=>r.office);
+  let h2='<tr><th style="min-width:160px">DDO</th>'+dates.map(d=>'<th>'+d+'</th>').join('')+'</tr>';
+  top.forEach(inst=>{
+    h2+='<tr><td style="text-align:left;background:#1e3a5f;color:#fff;font-size:10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 9px" title="'+inst+'">'+inst.replace(/^[A-Z]{2}\d+\s/,'')+'</td>';
+    dates.forEach(date=>{const row=(allSheetData[date]||[]).find(r=>r.office===inst);const v=row?row.pct:null;const bg=v===null?'#e2e8f0':hmPct(v);const tc=v!==null&&v>0.5?'#fff':'#0f172a';h2+='<td style="background:'+bg+';color:'+tc+';font-size:10px">'+(v===null?'—':pctStr(v))+'</td>';});
+    h2+='</tr>';
+  });
+  document.getElementById('heatmapInst').innerHTML=h2;
+}
+function hmPct(p){if(p>=0.95)return'#1a56db';if(p>=0.85)return'#059669';if(p>=0.70)return'#34d399';if(p>=0.50)return'#d97706';if(p>0)return'#dc2626';return'#7f1d1d';}
+function hmAbsent(a,cnt){if(a===0)return'#059669';const avg=cnt>0?a/cnt:a;if(avg<=2)return'#34d399';if(avg<=8)return'#fbbf24';if(avg<=20)return'#f97316';if(avg<=50)return'#dc2626';return'#7f1d1d';}
+
+// ═══════════════════════════════════════════
+// EXPLORER
+// ═══════════════════════════════════════════
+function renderExplorer(){
+  if(!Object.keys(allSheetData).length)return;
+  document.getElementById('expEmpty').style.display='none';
+  document.getElementById('expContent').style.display='block';
+  const dv=document.getElementById('explorerDistrict').value;
+  const sv2=document.getElementById('explorerSort').value;
+  const se=document.getElementById('explorerSearch').value.toLowerCase();
+  const seen={};Object.values(allSheetData).flat().forEach(r=>{seen[r.office]=r;});
+  let data=Object.values(seen);
+  if(currentCategory!=='all')data=data.filter(r=>r.category===currentCategory);
+  if(dv!=='all')data=data.filter(r=>r.district===dv);
+  if(se)data=data.filter(r=>r.office.toLowerCase().includes(se)||r.district.toLowerCase().includes(se));
+  if(sv2==='pct_desc')data.sort((a,b)=>b.pct-a.pct);else if(sv2==='pct_asc')data.sort((a,b)=>a.pct-b.pct);else if(sv2==='absent_desc')data.sort((a,b)=>b.absent-a.absent);else data.sort((a,b)=>a.office.localeCompare(b.office));
+  document.getElementById('explorerCount').textContent='Showing '+data.length+' DDO'+(data.length!==1?'s':'');
+  document.getElementById('explorerGrid').innerHTML=data.map(r=>{
+    const rj=JSON.stringify({office:r.office,district:r.district,category:r.category,total:r.total,present:r.present,absent:r.absent,leaves:r.leaves,holidays:r.holidays,working:r.working,pct:r.pct,absentPct:r.absentPct}).replace(/'/g,"&#39;");
+    return'<div class="explorer-card" onclick=\'showInstDrill('+rj+')\'>'+
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px">'+
+    '<span style="font-size:9px;background:'+(DISTRICT_COLORS[r.district]||'#888')+'22;color:'+(DISTRICT_COLORS[r.district]||'#888')+';padding:2px 7px;border-radius:20px;font-weight:700">'+r.district+'</span>'+pctBadge(r.pct)+'</div>'+
+    '<div class="explorer-name">'+r.office.replace(/^[A-Z]{2,3}\d+\s/,'')+'</div>'+
+    '<div class="explorer-meta"><span>👥 '+fmt(r.total)+'</span><span>✅ '+fmt(r.present)+'</span><span>❌ '+fmt(r.absent)+'</span>'+catBadge(r.category)+'</div>'+
+    '<div class="explorer-bar"><div style="height:100%;border-radius:2px;width:'+(r.pct*100).toFixed(1)+'%;background:'+pctColor(r.pct)+'"></div></div>'+
+    '</div>';
+  }).join('')||'<div class="empty-state" style="padding:28px;grid-column:1/-1"><span class="eicon">🔍</span><h3>No matches</h3><p>Adjust filters</p></div>';
+}
+
+// ═══════════════════════════════════════════
+// TRENDS
+// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════
+// PERIOD SUMMARY TABLE EXPORT
+// ═══════════════════════════════════════════
+async function exportTrendTable(format){
+  const tt=document.getElementById('trendTable');
+  if(!tt||!tt.querySelector('tbody').children.length){alert('No trend data to export. Upload multiple date sheets.');return;}
+  const ts=nowFile();const name='Period_Summary_'+ts;
+  // Build data from table rows
+  const headers=['Period','DDOs','Present','Absent','Attendance %','Change'];
+  const rows=[];
+  tt.querySelectorAll('tbody tr').forEach(function(tr){
+    const cells=tr.querySelectorAll('td');
+    rows.push([
+      cells[0]?cells[0].textContent.trim():'',
+      cells[1]?cells[1].textContent.trim():'',
+      cells[2]?cells[2].textContent.trim():'',
+      cells[3]?cells[3].textContent.trim():'',
+      cells[4]?cells[4].querySelector('.pct-track')?
+        (parseFloat(cells[4].querySelector('.pct-fill').style.width)||0).toFixed(1)+'%':
+        cells[4].textContent.trim():'',
+      cells[5]?cells[5].textContent.trim():''
+    ]);
+  });
+  if(format==='csv'){
+    downloadCSV([headers,...rows],'EMIS_SEDGB_'+name);
+  } else if(format==='xlsx'){
+    const ws_data=[['EMIS SEDGB — Period Summary Report'],
+      ['Filters: '+getActiveFiltersLabel()+' | Generated: '+nowStr()],[],
+      headers,...rows];
+    const ws=XLSX.utils.aoa_to_sheet(ws_data);
+    ws['!cols']=[{wch:14},{wch:8},{wch:12},{wch:12},{wch:14},{wch:12}];
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Period Summary');
+    XLSX.writeFile(wb,'EMIS_SEDGB_'+name+'.xlsx');
+  } else if(format==='jpg'){
+    const card=tt.closest('.table-card');
+    if(!card)return;
+    const cv=await html2canvas(card,{scale:2.5,useCORS:true,backgroundColor:isDark()?'#1e293b':'#ffffff',logging:false});
+    const a=document.createElement('a');a.href=cv.toDataURL('image/jpeg',0.95);a.download='EMIS_SEDGB_'+name+'.jpg';a.click();
+  } else if(format==='pdf'){
+    const {jsPDF}=window.jspdf;if(!jsPDF)return;
+    const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+    const pageW=doc.internal.pageSize.getWidth(),pageH=doc.internal.pageSize.getHeight();
+    doc.setFillColor(30,58,95);doc.rect(0,0,pageW,20,'F');
+    doc.setTextColor(255,255,255);doc.setFontSize(12);doc.setFont('helvetica','bold');
+    doc.text('EMIS SEDGB — Period Summary Report',pageW/2,8,{align:'center'});
+    doc.setFontSize(9);doc.setFont('helvetica','normal');
+    doc.text('Filters: '+getActiveFiltersLabel()+' | Generated: '+nowStr(),pageW/2,15,{align:'center'});
+    // Add trend chart image
+    const tc=document.getElementById('chartTrend');
+    if(tc){try{const ti=tc.toDataURL('image/png');doc.addImage(ti,'PNG',14,22,pageW-28,50);}catch(e){}}
+    if(doc.autoTable){doc.autoTable({
+      head:[headers],body:rows,startY:76,
+      margin:{left:10,right:10,bottom:18},
+      styles:{fontSize:9,cellPadding:3,textColor:[15,23,42]},
+      headStyles:{fillColor:[30,58,95],textColor:[255,255,255],fontStyle:'bold'},
+      footStyles:{fillColor:[241,245,249],textColor:[15,23,42],fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[248,250,252]},bodyStyles:{textColor:[15,23,42]},
+      didDrawPage:function(d){
+        doc.setFillColor(30,58,95);doc.rect(0,pageH-10,pageW,10,'F');
+        doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(255,255,255);
+        doc.text('EMIS SEDGB | Confidential — For Official Use Only',8,pageH-4);
+        doc.text('Designed and Developed by Muhammad Hassan Assistant IT EMIS',pageW/2,pageH-4,{align:'center'});
+        doc.text('Page '+d.pageNumber,pageW-8,pageH-4,{align:'right'});
+      }
+    });}
+    doc.save('EMIS_SEDGB_'+name+'.pdf');
+  }
+}
+
+
+function renderTrends(){
+  const dates=Object.keys(allSheetData).sort();
+  if(dates.length<2)return;
+  document.getElementById('trendEmpty').style.display='none';
+  document.getElementById('trendContent').style.display='block';
+  const grp=document.getElementById('trendGroup').value,dv=document.getElementById('trendDistrict').value;
+  const daily=dates.map(d=>{
+    let rows=allSheetData[d]||[];
+    if(currentCategory!=='all')rows=rows.filter(r=>r.category===currentCategory);
+    if(dv!=='all')rows=rows.filter(r=>r.district===dv);
+    const w=rows.reduce((s,r)=>s+r.working,0),p=rows.reduce((s,r)=>s+r.present,0),a=rows.reduce((s,r)=>s+r.absent,0);
+    return{date:d,pct:w>0?p/w:0,present:p,absent:a,working:w,count:rows.length};
+  });
+  let series=daily;
+  if(grp==='week'){const m={};daily.forEach(d=>{const pts=d.date.split('-');const wk='Wk'+Math.ceil(parseInt(pts[0])/7)+' '+pts[2];if(!m[wk])m[wk]={...d,cnt:0};m[wk].present+=d.present;m[wk].absent+=d.absent;m[wk].working+=d.working;m[wk].cnt++;});series=Object.entries(m).map(([k,v])=>({...v,date:k,pct:v.working>0?v.present/v.working:0}));}
+  else if(grp==='month'){const m={};daily.forEach(d=>{const pts=d.date.split('-');const mo=pts[1]+'-'+pts[2];if(!m[mo])m[mo]={...d,cnt:0};m[mo].present+=d.present;m[mo].absent+=d.absent;m[mo].working+=d.working;m[mo].cnt++;});series=Object.entries(m).map(([k,v])=>({...v,date:k,pct:v.working>0?v.present/v.working:0}));}
+  const avg=series.reduce((s,d)=>s+d.pct,0)/series.length;
+  const mx=series.reduce((a,b)=>a.pct>b.pct?a:b,series[0]),mn=series.reduce((a,b)=>a.pct<b.pct?a:b,series[0]);
+  const chg=series.length>=2?(series[series.length-1].pct-series[series.length-2].pct)*100:0;
+  document.getElementById('trendStats').innerHTML=[{v:pctStr(avg),l:'Avg Attendance'},{v:mx?.date||'—',l:'Best ('+pctStr(mx?.pct||0)+')'},{v:mn?.date||'—',l:'Worst ('+pctStr(mn?.pct||0)+')'},{v:(chg>=0?'+':'')+chg.toFixed(1)+'%',l:'Latest Change'},{v:series.length,l:'Periods'}].map(s=>'<div class="trend-stat"><div class="trend-stat-val" style="color:'+(parseFloat(s.v)<0?'#dc2626':'#1a56db')+'">'+s.v+'</div><div class="trend-stat-label">'+s.l+'</div></div>').join('');
+  destroyChart('chartTrend');
+  charts['chartTrend']=new Chart(document.getElementById('chartTrend').getContext('2d'),{type:'line',data:{labels:series.map(d=>d.date),datasets:[{label:'Attendance %',data:series.map(d=>+(d.pct*100).toFixed(1)),borderColor:'#1a56db',backgroundColor:'rgba(26,86,219,.1)',fill:true,tension:.4,pointRadius:4,datalabels:{display:false}},{label:'87% Target',data:series.map(()=>TARGET_PCT),borderColor:'#dc2626',borderDash:[6,4],borderWidth:1.5,pointRadius:0,fill:false,datalabels:{display:false}}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{color:cT()}},datalabels:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+'%'}}},scales:{y:{ticks:{callback:v=>v+'%',color:cT()},grid:{color:cG()}},x:{grid:{display:false},ticks:{color:cT()}}}}});
+  destroyChart('chartTrendStack');
+  charts['chartTrendStack']=new Chart(document.getElementById('chartTrendStack').getContext('2d'),{type:'bar',data:{labels:series.map(d=>d.date),datasets:[{label:'Present',data:series.map(d=>d.present),backgroundColor:'#065f46',borderRadius:3,datalabels:dlTop(v=>fmt(v))},{label:'Absent',data:series.map(d=>d.absent),backgroundColor:'#991b1b',borderRadius:3,datalabels:{display:false}}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{color:cT()}},datalabels:{display:false}},scales:{x:{stacked:true,grid:{display:false},ticks:{color:cT()}},y:{stacked:true,beginAtZero:true,grid:{color:cG()},ticks:{color:cT()}}}}});
+  destroyChart('chartDistrictTrend');
+  const allDists=[...new Set(Object.values(allSheetData).flat().map(r=>r.district))].sort();
+  charts['chartDistrictTrend']=new Chart(document.getElementById('chartDistrictTrend').getContext('2d'),{type:'line',data:{labels:dates,datasets:allDists.slice(0,6).map((dist,i)=>({label:dist,data:dates.map(d=>{const rows=(allSheetData[d]||[]).filter(r=>r.district===dist&&(currentCategory==='all'||r.category===currentCategory));const w=rows.reduce((s,r)=>s+r.working,0),p=rows.reduce((s,r)=>s+r.present,0);return+(w>0?(p/w*100).toFixed(1):0);}),borderColor:CHART_PALETTE[i],tension:.4,fill:false,pointRadius:3,datalabels:{display:false}}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{color:cT()}},datalabels:{display:false}},scales:{y:{ticks:{callback:v=>v+'%',color:cT()},grid:{color:cG()}},x:{grid:{display:false},ticks:{color:cT()}}}}});
+  const tt=document.getElementById('trendTable');
+  const _trendCols=[['Period','date'],['DDOs','count'],['Present','present'],['Absent','absent'],['Attendance %','pct'],['Δ Change',null]];
+  tt.querySelector('thead').innerHTML='<tr>'+_trendCols.map(function(p){var cls=p[1]&&trendSort.col===p[1]?(trendSort.dir>0?'sort-asc':'sort-desc'):'';var da=p[1]?' data-sk="'+p[1]+'"':'';return'<th'+da+' class="'+cls+'">'+p[0]+'</th>';}).join('')+'</tr>';
+  tt.querySelector('thead').querySelectorAll('th[data-sk]').forEach(function(t){t.onclick=function(){trendSortBy(this.dataset.sk);};});
+  // Apply trendSort to series display
+  let trendDisplay=[...series];
+  if(trendSort.col&&trendSort.col!=='date'){trendDisplay.sort((a,b)=>{const av=a[trendSort.col],bv=b[trendSort.col];return trendSort.dir*(av-bv);});}
+  else if(trendSort.col==='date'){trendDisplay.sort((a,b)=>trendSort.dir*a.date.localeCompare(b.date));}
+  tt.querySelector('tbody').innerHTML=trendDisplay.map((d,i)=>{const prev=i>0?series[i-1]:null;const c=prev?((d.pct-prev.pct)*100).toFixed(1):null;return'<tr><td><strong>'+d.date+'</strong></td><td>'+d.count+'</td><td>'+fmt(d.present)+'</td><td style="color:#dc2626">'+fmt(d.absent)+'</td><td>'+pctBar(d.pct)+'</td><td style="color:'+(c&&parseFloat(c)>=0?'#059669':'#dc2626')+'">'+(c!==null?(parseFloat(c)>=0?'▲ +':'▼ ')+c+'%':'—')+'</td></tr>';}).join('');
+}
+
+// ═══════════════════════════════════════════
+// DISTRICT TABLE EXPORTS (JPG,PDF,CSV,XLSX,SVG)
+// ═══════════════════════════════════════════
+async function distTableExport(format){
+  const agg=getDistrictAgg(filteredData).sort((a,b)=>b.pct-a.pct);
+  const ts=nowFile();
+  if(format==='jpg'){
+    const el=document.getElementById('districtTableCard');if(!el){alert('Go to Districts tab first.');return;}
+    const cv=await html2canvas(el,{scale:3,useCORS:true,backgroundColor:isDark()?'#1e293b':'#ffffff',logging:false});
+    const a=document.createElement('a');a.href=cv.toDataURL('image/jpeg',0.96);a.download='EMIS_SEDGB_District_Summary_'+ts+'.jpg';a.click();
+  } else if(format==='svg'){
+    const el=document.getElementById('districtTableCard');if(!el)return;
+    const cv=await html2canvas(el,{scale:2,useCORS:true,backgroundColor:'#ffffff',logging:false});
+    const w=cv.width,h=cv.height;
+    const svgStr='<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="'+w+'" height="'+(h+18)+'">\n<rect width="'+w+'" height="'+(h+18)+'" fill="#fff"/>\n<image href="'+cv.toDataURL('image/png')+'" x="0" y="0" width="'+w+'" height="'+h+'"/>\n<text x="8" y="'+(h+13)+'" font-family="IBM Plex Sans,sans-serif" font-size="10" fill="#94a3b8">EMIS SEDGB District Summary | '+nowStr()+'</text>\n</svg>';
+    const blob=new Blob([svgStr],{type:'image/svg+xml'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='EMIS_SEDGB_District_Summary_'+ts+'.svg';a.click();URL.revokeObjectURL(url);
+  } else if(format==='csv'){
+    downloadCSV([['Sr #','District','DDOs','Total Employees','Present','Absent','Attendance %','Absent %','Status'],
+      ...agg.map((d,i)=>[i+1,d.district,d.count,d.total,d.present,d.absent,(d.pct*100).toFixed(2),(d.absentPct*100).toFixed(2),d.pct>=0.87?'On Target':d.pct>=0.76?'Needs Attention':'Critical'])],
+      'EMIS_SEDGB_District_Summary_'+ts);
+  } else if(format==='xlsx'){
+    const ws_data=[['EMIS SEDGB — District-wise Attendance Summary'],['Period: '+getPeriod()+' | Generated: '+nowStr()+' | Prepared By: EMIS SEDGB'],[],
+      ['Sr #','District','DDOs','Total Employees','Present','Absent','Attendance %','Absent %','Status'],
+      ...agg.map((d,i)=>[i+1,d.district,d.count,d.total,d.present,d.absent,+(d.pct*100).toFixed(2),+(d.absentPct*100).toFixed(2),d.pct>=0.87?'On Target':d.pct>=0.76?'Needs Attention':'Critical']),
+      [],['','Grand Total (GB)',agg.length,agg.reduce((s,d)=>s+d.total,0),agg.reduce((s,d)=>s+d.present,0),agg.reduce((s,d)=>s+d.absent,0),'','','']];
+    const ws=XLSX.utils.aoa_to_sheet(ws_data);ws['!cols']=[{wch:6},{wch:14},{wch:8},{wch:18},{wch:12},{wch:12},{wch:14},{wch:12},{wch:16}];
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'District Summary');XLSX.writeFile(wb,'EMIS_SEDGB_District_Summary_'+ts+'.xlsx');
+  } else if(format==='pdf'){
+    distTablePDF(agg,ts);
+  }
+}
+
+function distTablePDF(agg,ts){ // ★ #12 Hybrid PDF
+  const {jsPDF}=window.jspdf;if(!jsPDF)return;
+  const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+  const pageW=doc.internal.pageSize.getWidth(),pageH=doc.internal.pageSize.getHeight();
+  const totW=agg.reduce((s,d)=>s+d.working,0),totP=agg.reduce((s,d)=>s+d.present,0),totA=agg.reduce((s,d)=>s+d.absent,0);
+  // Letterhead block
+  doc.setFillColor(30,58,95);doc.rect(0,0,pageW,22,'F');
+  doc.setTextColor(255,255,255);doc.setFontSize(13);doc.setFont('helvetica','bold');
+  doc.text('GOVERNMENT OF GILGIT-BALTISTAN',pageW/2,8,{align:'center'});
+  doc.setFontSize(10);doc.setFont('helvetica','normal');
+  doc.text('School Education Department — EMIS SEDGB',pageW/2,15,{align:'center'});
+  doc.setTextColor(30,58,95);doc.setFontSize(11);doc.setFont('helvetica','bold');
+  doc.text('District-wise Attendance Summary Report',pageW/2,30,{align:'center'});
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(70,85,105);
+  doc.text('Filters: '+getActiveFiltersLabel(),14,38);doc.text('Generated: '+nowStr(),14,44);
+  doc.text('Prepared By: EMIS SEDGB  |  Data Source: EMIS Biometric Attendance System',14,50);
+  doc.setDrawColor(26,86,219);doc.setLineWidth(0.4);doc.line(14,53,pageW-14,53);
+  // Capture charts as images and embed in PDF
+  let nextY=57;
+  const chartBar=document.getElementById('rptChartBar');
+  const chartStack=document.getElementById('rptChartStack');
+  if(chartBar&&chartStack){
+    try{
+      const barImg=chartBar.toDataURL('image/png');
+      const stackImg=chartStack.toDataURL('image/png');
+      const halfW=(pageW-28)/2;
+      const chartH=55;
+      doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(30,58,95);
+      doc.text('Present % by District (87% target line shown in red)',14,nextY-2);
+      doc.text('Present vs Absent by District',14+halfW+4,nextY-2);
+      doc.addImage(barImg,'PNG',14,nextY,halfW,chartH);
+      doc.addImage(stackImg,'PNG',14+halfW+4,nextY,halfW,chartH);
+      nextY+=chartH+6;
+    }catch(e){console.warn('Chart capture failed:',e);}
+  }
+  if(doc.autoTable){doc.autoTable({
+    head:[['Sr #','District','DDOs','Total Employees','Present','Absent','Attendance %','Absent %','Status']],
+    body:agg.map((d,i)=>[i+1,d.district,d.count,d.total,d.present,d.absent,(d.pct*100).toFixed(1)+'%',(d.absentPct*100).toFixed(1)+'%',d.pct>=0.87?'On Target':d.pct>=0.76?'Needs Attention':'Critical']),
+    foot:[['','Grand Total (GB)',agg.length,agg.reduce((s,d)=>s+d.total,0),totP,totA,totW>0?((totP/totW)*100).toFixed(1)+'%':'—',totW>0?((totA/totW)*100).toFixed(1)+'%':'—','']],
+    startY:57,margin:{left:10,right:10,bottom:14},
+    styles:{fontSize:9,cellPadding:3.5},
+    headStyles:{fillColor:[30,58,95],textColor:255,fontStyle:'bold'},
+    footStyles:{fillColor:[241,245,249],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[248,250,252]},
+    bodyStyles:{textColor:[15,23,42]},
+    columnStyles:{0:{halign:'center',cellWidth:12},1:{cellWidth:26},3:{halign:'right'},4:{halign:'right'},5:{halign:'right'},6:{halign:'center'},7:{halign:'center'},8:{cellWidth:26}},
+    willDrawCell:function(data){ // ★ #12 colour-coded rows
+      if(data.section==='body'){
+        if(data.column.index===8){const v=data.cell.raw;if(v==='On Target'){data.cell.styles.textColor=[5,150,105];data.cell.styles.fontStyle='bold';}else if(v==='Critical'){data.cell.styles.textColor=[220,38,38];data.cell.styles.fontStyle='bold';}else if(v==='Needs Attention'){data.cell.styles.textColor=[217,119,6];data.cell.styles.fontStyle='bold';}}
+        if(data.column.index===5&&parseInt(data.cell.raw)>0){data.cell.styles.textColor=[220,38,38];data.cell.styles.fontStyle='bold';}
+      }
+    },
+    didDrawPage:function(data){
+      if(data.pageNumber>1){doc.setFillColor(30,58,95);doc.rect(0,0,pageW,10,'F');doc.setTextColor(255,255,255);doc.setFontSize(8);doc.setFont('helvetica','bold');doc.text('EMIS SEDGB — District-wise Attendance Summary',pageW/2,6.5,{align:'center'});}
+      doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(120,120,140);
+      doc.setFillColor(30,58,95);doc.rect(0,pageH-10,pageW,10,'F');
+      doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(255,255,255);
+      doc.text('EMIS SEDGB | Confidential — For Official Use Only',10,pageH-4);
+      doc.text('Designed and Developed by Muhammad Hassan Assistant IT EMIS',pageW/2,pageH-4,{align:'center'});
+      doc.text('Page '+data.pageNumber,pageW-10,pageH-4,{align:'right'});
+    }
+  });}
+  doc.save('EMIS_SEDGB_District_Summary_'+ts+'.pdf');
+}
+
+// ═══════════════════════════════════════════
+// ATTENDANCE REPORT (#12 hybrid PDF, #6 SVG)
+// ═══════════════════════════════════════════
+function getAttData(){
+  const sv2=document.getElementById('rptAttSort').value;
+  const dv=document.getElementById('rptAttDate').value;
+  const cv=document.getElementById('rptAttCat').value;
+  let data=dv==='all'?[...filteredData]:[...(allSheetData[dv]||filteredData)];
+  if(cv!=='all')data=data.filter(r=>r.category===cv);
+  if(sv2==='pct_desc')data.sort((a,b)=>b.pct-a.pct);else if(sv2==='pct_asc')data.sort((a,b)=>a.pct-b.pct);else if(sv2==='absent_desc')data.sort((a,b)=>b.absent-a.absent);else data.sort((a,b)=>a.office.localeCompare(b.office));
+  return data;
+}
+// ═══════════════════════════════════════════════════════
+// DISTRICT REPORT (Reports tab) — map + charts + table
+// ═══════════════════════════════════════════════════════
+function renderDistrictReport(){
+  if(!filteredData.length)return;
+  document.getElementById('rptEmpty').style.display='none';
+  document.getElementById('rptContent').style.display='block';
+  const sortVal=document.getElementById('rptDistrictSort')?.value||'pct_desc';
+  let agg=getDistrictAgg(filteredData);
+  if(sortVal==='pct_desc')agg.sort((a,b)=>b.pct-a.pct);
+  else if(sortVal==='pct_asc')agg.sort((a,b)=>a.pct-b.pct);
+  else if(sortVal==='name_asc')agg.sort((a,b)=>a.district.localeCompare(b.district));
+  else if(sortVal==='absent_desc')agg.sort((a,b)=>b.absent-a.absent);
+  const dateVal=document.getElementById('rptDistrictDate')?.value||'all';
+  const period=dateVal==='all'?getPeriod():dateVal;
+  const totW=agg.reduce((s,d)=>s+d.working,0),totP=agg.reduce((s,d)=>s+d.present,0),totA=agg.reduce((s,d)=>s+d.absent,0),totE=agg.reduce((s,d)=>s+d.total,0);
+  // Meta
+  const meta=document.getElementById('districtReportMeta');
+  if(meta)meta.innerHTML=
+    '<div><span class="lh-meta-key">Report Title:</span><span class="lh-meta-val">District-wise Attendance Summary Report</span></div>'+
+    '<div><span class="lh-meta-key">Period:</span><span class="lh-meta-val">'+period+'</span></div>'+
+    '<div><span class="lh-meta-key">Generated On:</span><span class="lh-meta-val">'+nowStr()+'</span></div>'+
+    '<div><span class="lh-meta-key">Prepared By:</span><span class="lh-meta-val">EMIS SEDGB</span></div>'+
+    '<div><span class="lh-meta-key">Filters:</span><span class="lh-meta-val">'+getActiveFiltersLabel()+'</span></div>'+
+    '<div><span class="lh-meta-key">Districts:</span><span class="lh-meta-val">'+agg.length+' districts | '+filteredData.length+' DDOs</span></div>';
+  const fd=document.getElementById('districtReportFooterDate');
+  if(fd)fd.textContent='Generated: '+nowStr();
+  // Map — defer so container is visible and has width
+  setTimeout(function(){drawMap('rptGeoMap','rptMapTooltip','_noleg','_noleg','pct','all',275,showDistrictDrill);},120);
+  // Chart 1: Presence %
+  destroyChart('rptChartBar');
+  const ctx1=document.getElementById('rptChartBar');
+  if(ctx1){charts['rptChartBar']=new Chart(ctx1.getContext('2d'),{type:'bar',
+    data:{labels:agg.map(d=>d.district),datasets:[
+      {label:'Present %',data:agg.map(d=>+(d.pct*100).toFixed(1)),backgroundColor:agg.map(d=>pctColor(d.pct)),borderRadius:5,
+       datalabels:dlTop(v=>v+'%')},
+      {label:'87% Target',data:agg.map(()=>87),type:'line',borderColor:'#dc2626',borderDash:[5,4],borderWidth:2,pointRadius:0,fill:false,datalabels:{display:false}}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top',labels:{color:cT()}},datalabels:{},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+'%'}}},
+      scales:{y:{beginAtZero:true,max:108,ticks:{callback:v=>v+'%',color:cT()},grid:{color:cG()}},x:{grid:{display:false},ticks:{color:cT(),font:{size:9}}}}}
+  });}
+  // Chart 2: Present vs Absent stacked
+  destroyChart('rptChartStack');
+  const ctx2=document.getElementById('rptChartStack');
+  if(ctx2){charts['rptChartStack']=new Chart(ctx2.getContext('2d'),{type:'bar',
+    data:{labels:agg.map(d=>d.district),datasets:[
+      {label:'Present',data:agg.map(d=>d.present),backgroundColor:'#065f46',borderRadius:4,datalabels:dlTop(v=>fmt(v))},
+      {label:'Absent',data:agg.map(d=>d.absent),backgroundColor:'#991b1b',borderRadius:4,datalabels:{display:false}}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top',labels:{color:cT()}},datalabels:{},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.parsed.y)}}},
+      scales:{x:{stacked:true,grid:{display:false},ticks:{color:cT(),font:{size:9}}},y:{stacked:true,beginAtZero:true,grid:{color:cG()},ticks:{color:cT()}}}}
+  });}
+  // Table
+  const tbl=document.getElementById('districtReportTable');
+  if(!tbl)return;
+  tbl.querySelector('thead').innerHTML='<tr><th>#</th><th>District</th><th>DDOs</th><th>Total Employees</th><th>Present</th><th>Absent</th><th>Attendance %</th><th>Absent %</th><th>Status</th></tr>';
+  tbl.querySelector('tbody').innerHTML=agg.map(function(d,i){
+    return'<tr class="dist-row" data-dist="'+d.district+'" style="'+(i%2!==0?'background:var(--surface-2)':'')+';cursor:pointer">'+
+    '<td>'+(i+1)+'</td>'+
+    '<td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+(DISTRICT_COLORS[d.district]||'#888')+';margin-right:6px;vertical-align:middle"></span><strong>'+d.district+'</strong></td>'+
+    '<td>'+d.count+'</td><td>'+fmt(d.total)+'</td><td>'+fmt(d.present)+'</td>'+
+    '<td style="color:#991b1b;font-weight:700">'+fmt(d.absent)+'</td>'+
+    '<td>'+pctBar(d.pct)+'</td><td>'+pctBadge(d.absentPct)+'</td><td>'+trafficLight(d.pct)+'</td>'+
+    '</tr>';}).join('');
+  tbl.querySelectorAll('tr[data-dist]').forEach(function(row){row.onclick=function(){showDistrictDrill(this.getAttribute('data-dist'));};});
+  tbl.querySelector('tfoot').innerHTML='<td colspan="2"><strong>Grand Total (GB)</strong></td><td>'+agg.length+' districts</td><td><strong>'+fmt(totE)+'</strong></td><td><strong>'+fmt(totP)+'</strong></td><td style="color:#991b1b"><strong>'+fmt(totA)+'</strong></td><td><strong>'+pctBar(totW>0?totP/totW:0)+'</strong></td><td><strong>'+pctBadge(totW>0?totA/totW:0)+'</strong></td><td><strong>'+trafficLight(totW>0?totP/totW:0)+'</strong></td>';
+}
+
+async function exportDistrictReport(format){
+  let agg=getDistrictAgg(filteredData);
+  const sortVal=document.getElementById('rptDistrictSort')?.value||'pct_desc';
+  if(sortVal==='pct_desc')agg.sort((a,b)=>b.pct-a.pct);
+  else if(sortVal==='pct_asc')agg.sort((a,b)=>a.pct-b.pct);
+  else if(sortVal==='name_asc')agg.sort((a,b)=>a.district.localeCompare(b.district));
+  else agg.sort((a,b)=>b.absent-a.absent);
+  const ts=nowFile();const name='District_Report_'+ts;
+  if(format==='jpg'){
+    const el=document.getElementById('districtReportPreview');if(!el)return;
+    const cv=await html2canvas(el,{scale:2.5,useCORS:true,backgroundColor:'#ffffff',logging:false});
+    const a=document.createElement('a');a.href=cv.toDataURL('image/jpeg',0.95);a.download='EMIS_SEDGB_'+name+'.jpg';a.click();
+  } else if(format==='csv'){
+    downloadCSV([['Sr #','District','DDOs','Total Employees','Present','Absent','Attendance %','Absent %','Status'],...agg.map((d,i)=>[i+1,d.district,d.count,d.total,d.present,d.absent,(d.pct*100).toFixed(2),(d.absentPct*100).toFixed(2),d.pct>=0.87?'On Target':d.pct>=0.76?'Needs Attention':'Critical'])],'EMIS_SEDGB_'+name);
+  } else if(format==='xlsx'){
+    const totW=agg.reduce((s,d)=>s+d.working,0),totP=agg.reduce((s,d)=>s+d.present,0),totA=agg.reduce((s,d)=>s+d.absent,0);
+    const ws_data=[['EMIS SEDGB — District-wise Attendance Summary Report'],['Filters: '+getActiveFiltersLabel()+' | Generated: '+nowStr()+'  | Designed and Developed by Muhammad Hassan Assistant IT EMIS'],[],
+      ['Sr #','District','DDOs','Total Employees','Present','Absent','Attendance %','Absent %','Status'],
+      ...agg.map((d,i)=>[i+1,d.district,d.count,d.total,d.present,d.absent,+(d.pct*100).toFixed(2),+(d.absentPct*100).toFixed(2),d.pct>=0.87?'On Target':d.pct>=0.76?'Needs Attention':'Critical']),
+      [],['','Grand Total (GB)',agg.length,agg.reduce((s,d)=>s+d.total,0),agg.reduce((s,d)=>s+d.present,0),agg.reduce((s,d)=>s+d.absent,0),+(totW>0?(totP/totW*100).toFixed(2):0),+(totW>0?(totA/totW*100).toFixed(2):0),'']];
+    const ws=XLSX.utils.aoa_to_sheet(ws_data);ws['!cols']=[{wch:6},{wch:14},{wch:8},{wch:18},{wch:12},{wch:12},{wch:14},{wch:12},{wch:16}];
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'District Summary');XLSX.writeFile(wb,'EMIS_SEDGB_'+name+'.xlsx');
+  } else if(format==='pdf'){
+    await distReportPDF(agg,ts);
+  }
+}
+
+async function distReportPDF(agg,ts){
+  const {jsPDF}=window.jspdf;if(!jsPDF)return;
+  const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+  const pageW=doc.internal.pageSize.getWidth(),pageH=doc.internal.pageSize.getHeight();
+  const totW=agg.reduce((s,d)=>s+d.working,0),totP=agg.reduce((s,d)=>s+d.present,0),totA=agg.reduce((s,d)=>s+d.absent,0),totE=agg.reduce((s,d)=>s+d.total,0);
+  doc.setFillColor(30,58,95);doc.rect(0,0,pageW,22,'F');
+  doc.setTextColor(255,255,255);doc.setFontSize(13);doc.setFont('helvetica','bold');
+  doc.text('GOVERNMENT OF GILGIT-BALTISTAN',pageW/2,8,{align:'center'});
+  doc.setFontSize(10);doc.setFont('helvetica','normal');
+  doc.text('School Education Department — EMIS SEDGB',pageW/2,15,{align:'center'});
+  doc.setTextColor(30,58,95);doc.setFontSize(11);doc.setFont('helvetica','bold');
+  doc.text('District-wise Attendance Summary Report',pageW/2,30,{align:'center'});
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(70,85,105);
+  doc.text('Filters: '+getActiveFiltersLabel(),14,38);
+  doc.text('Generated: '+nowStr(),14,44);
+  doc.text('Prepared By: EMIS SEDGB  |  Data Source: EMIS Biometric Attendance System',14,50);
+  doc.setDrawColor(26,86,219);doc.setLineWidth(0.4);doc.line(14,53,pageW-14,53);
+  // Capture charts as images and embed in PDF
+  let nextY=57;
+  const chartBar=document.getElementById('rptChartBar');
+  const chartStack=document.getElementById('rptChartStack');
+  if(chartBar&&chartStack){
+    try{
+      const barImg=chartBar.toDataURL('image/png');
+      const stackImg=chartStack.toDataURL('image/png');
+      const halfW=(pageW-28)/2;
+      const chartH=55;
+      doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(30,58,95);
+      doc.text('Present % by District (87% target line shown in red)',14,nextY-2);
+      doc.text('Present vs Absent by District',14+halfW+4,nextY-2);
+      doc.addImage(barImg,'PNG',14,nextY,halfW,chartH);
+      doc.addImage(stackImg,'PNG',14+halfW+4,nextY,halfW,chartH);
+      nextY+=chartH+6;
+    }catch(e){console.warn('Chart capture failed:',e);}
+  }
+  if(doc.autoTable){doc.autoTable({
+    head:[['Sr #','District','DDOs','Total Employees','Present','Absent','Attendance %','Absent %','Status']],
+    body:agg.map((d,i)=>[i+1,d.district,d.count,d.total,d.present,d.absent,(d.pct*100).toFixed(1)+'%',(d.absentPct*100).toFixed(1)+'%',d.pct>=0.87?'On Target':d.pct>=0.76?'Needs Attention':'Critical']),
+    foot:[['','Grand Total (GB)',agg.length,totE,totP,totA,totW>0?((totP/totW)*100).toFixed(1)+'%':'—',totW>0?((totA/totW)*100).toFixed(1)+'%':'—','']],
+    startY:nextY,margin:{left:10,right:10,bottom:18},
+    styles:{fontSize:9,cellPadding:3.5,textColor:[15,23,42]},
+    headStyles:{fillColor:[30,58,95],textColor:[255,255,255],fontStyle:'bold'},
+    footStyles:{fillColor:[241,245,249],textColor:[15,23,42],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[248,250,252]},bodyStyles:{textColor:[15,23,42]},
+    columnStyles:{0:{halign:'center',cellWidth:12},1:{cellWidth:26},3:{halign:'right'},4:{halign:'right'},5:{halign:'right'},6:{halign:'center'},7:{halign:'center'},8:{cellWidth:26}},
+    willDrawCell:function(data){
+      if(data.section==='body'){
+        if(data.column.index===8){const v=data.cell.raw;if(v==='On Target'){data.cell.styles.textColor=[5,150,105];data.cell.styles.fontStyle='bold';}else if(v==='Critical'){data.cell.styles.textColor=[220,38,38];data.cell.styles.fontStyle='bold';}else if(v==='Needs Attention'){data.cell.styles.textColor=[217,119,6];data.cell.styles.fontStyle='bold';}}
+        if(data.column.index===5&&parseInt(data.cell.raw)>0){data.cell.styles.textColor=[220,38,38];data.cell.styles.fontStyle='bold';}
+      }
+    },
+    didDrawPage:function(data){
+      if(data.pageNumber>1){doc.setFillColor(30,58,95);doc.rect(0,0,pageW,10,'F');doc.setTextColor(255,255,255);doc.setFontSize(8);doc.setFont('helvetica','bold');doc.text('EMIS SEDGB — District-wise Attendance Summary',pageW/2,6.5,{align:'center'});}
+      doc.setFillColor(30,58,95);doc.rect(0,pageH-10,pageW,10,'F');
+      doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(255,255,255);
+      doc.text('EMIS SEDGB | Confidential — For Official Use Only',10,pageH-4);
+      doc.text('Designed and Developed by Muhammad Hassan Assistant IT EMIS',pageW/2,pageH-4,{align:'center'});
+      doc.text('Page '+data.pageNumber,pageW-10,pageH-4,{align:'right'});
+    }
+  });}
+  doc.save('EMIS_SEDGB_District_Report_'+ts+'.pdf');
+}
+
+
+function renderAttReport(){
+  if(!filteredData.length){document.getElementById('rptEmpty').style.display='block';document.getElementById('rptContent').style.display='none';return;}
+  document.getElementById('rptEmpty').style.display='none';document.getElementById('rptContent').style.display='block';
+  const data=getAttData();
+  const dv=document.getElementById('rptAttDate').value;const period=dv==='all'?getPeriod():dv;
+  document.getElementById('attReportMeta').innerHTML=
+    '<div><span class="lh-meta-key">Report Title:</span><span class="lh-meta-val">DDO Attendance Summary Report</span></div>'+
+    '<div><span class="lh-meta-key">Period:</span><span class="lh-meta-val">'+period+'</span></div>'+
+    '<div><span class="lh-meta-key">Generated On:</span><span class="lh-meta-val">'+nowStr()+'</span></div>'+
+    '<div><span class="lh-meta-key">Prepared By:</span><span class="lh-meta-val">EMIS SEDGB</span></div>'+
+    '<div><span class="lh-meta-key">Data Source:</span><span class="lh-meta-val">EMIS Biometric Attendance System</span></div>'+
+    '<div><span class="lh-meta-key">Records:</span><span class="lh-meta-val">'+data.length+' DDOs</span></div>';
+  document.getElementById('attReportFooterDate').textContent='Generated: '+nowStr();
+  const tbl=document.getElementById('attReportTable');
+  tbl.querySelector('thead').innerHTML='<tr><th>#</th><th>DDO Code</th><th>DDO Name</th><th>District</th><th>Category</th><th>Total</th><th>Present</th><th>Absent</th><th>Att %</th><th>Status</th></tr>';
+  tbl.querySelector('tbody').innerHTML=data.map((r,i)=>'<tr style="'+(i%2!==0?'background:#f8fafc':'')+'"><td>'+(i+1)+'</td><td style="font-family:IBM Plex Mono,monospace;font-size:10px">'+(r.office.match(/^[A-Z]+\d+/)||['—'])[0]+'</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+r.office+'">'+r.office+'</td><td>'+r.district+'</td><td>'+catBadge(r.category)+'</td><td>'+fmt(r.total)+'</td><td>'+fmt(r.present)+'</td><td style="color:#dc2626;font-weight:700">'+fmt(r.absent)+'</td><td>'+pctBar(r.pct)+'</td><td>'+trafficLight(r.pct)+'</td></tr>').join('');
+  const totW=data.reduce((s,r)=>s+r.working,0),totP=data.reduce((s,r)=>s+r.present,0);
+  tbl.querySelector('tfoot').innerHTML='<td colspan="5"><strong>TOTAL — '+data.length+' DDOs</strong></td><td><strong>'+fmt(data.reduce((s,r)=>s+r.total,0))+'</strong></td><td><strong>'+fmt(totP)+'</strong></td><td style="color:#dc2626"><strong>'+fmt(data.reduce((s,r)=>s+r.absent,0))+'</strong></td><td><strong>'+pctBar(totW>0?totP/totW:0)+'</strong></td><td><strong>'+trafficLight(totW>0?totP/totW:0)+'</strong></td>';
+}
+
+async function exportAttReport(format){
+  const data=getAttData();const ts=nowFile();const name='Attendance_Summary_'+ts;
+  if(format==='csv'){downloadCSV([['#','DDO Code','DDO Name','District','Category','Total','Present','Absent','Att %','Status'],...data.map((r,i)=>[i+1,(r.office.match(/^[A-Z]+\d+/)||['—'])[0],r.office,r.district,r.category,r.total,r.present,r.absent,(r.pct*100).toFixed(2),r.pct>=0.87?'On Target':r.pct>=0.76?'Needs Attention':'Critical'])],'EMIS_SEDGB_'+name);}
+  else if(format==='xlsx'){const ws_data=[['EMIS SEDGB — DDO Attendance Summary Report'],['Filters: '+getActiveFiltersLabel()+' | Generated: '+nowStr()+' | '+"Designed and Developed by Muhammad Hassan Assistant IT EMIS"],[],['#','DDO Code','DDO Name','District','Category','Total','Present','Absent','Att %','Status'],...data.map((r,i)=>[i+1,(r.office.match(/^[A-Z]+\d+/)||['—'])[0],r.office,r.district,r.category,r.total,r.present,r.absent,+(r.pct*100).toFixed(2),r.pct>=0.87?'On Target':r.pct>=0.76?'Needs Attention':'Critical'])];const ws=XLSX.utils.aoa_to_sheet(ws_data);ws['!cols']=[{wch:5},{wch:13},{wch:50},{wch:12},{wch:11},{wch:9},{wch:9},{wch:9},{wch:12},{wch:16}];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Attendance Summary');XLSX.writeFile(wb,'EMIS_SEDGB_'+name+'.xlsx');}
+  else if(format==='jpg'){const el=document.getElementById('attReportPreview');if(!el)return;const cv=await html2canvas(el,{scale:3,useCORS:true,backgroundColor:'#ffffff',logging:false});const a=document.createElement('a');a.href=cv.toDataURL('image/jpeg',0.95);a.download='EMIS_SEDGB_'+name+'.jpg';a.click();}
+  else if(format==='svg'){ // ★ #6
+    const el=document.getElementById('attReportPreview');if(!el)return;
+    const cv=await html2canvas(el,{scale:2,useCORS:true,backgroundColor:'#ffffff',logging:false});
+    const w=cv.width,h=cv.height;
+    const svgStr='<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="'+w+'" height="'+(h+18)+'">\n<rect width="'+w+'" height="'+(h+18)+'" fill="#fff"/>\n<image href="'+cv.toDataURL('image/png')+'" x="0" y="0" width="'+w+'" height="'+h+'"/>\n<text x="8" y="'+(h+14)+'" font-family="IBM Plex Sans,sans-serif" font-size="10" fill="#94a3b8">EMIS SEDGB | '+nowStr()+'</text>\n</svg>';
+    const blob=new Blob([svgStr],{type:'image/svg+xml'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='EMIS_SEDGB_'+name+'.svg';a.click();URL.revokeObjectURL(url);
+  }
+  else if(format==='pdf'){attReportPDF(data,ts);}
+}
+
+function attReportPDF(data,ts){ // ★ #12 Hybrid PDF with colour-coded rows
+  const {jsPDF}=window.jspdf;if(!jsPDF)return;
+  const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+  const pageW=doc.internal.pageSize.getWidth(),pageH=doc.internal.pageSize.getHeight();
+  doc.setFillColor(30,58,95);doc.rect(0,0,pageW,20,'F');
+  doc.setTextColor(255,255,255);doc.setFontSize(12);doc.setFont('helvetica','bold');
+  doc.text('GOVERNMENT OF GILGIT-BALTISTAN — EMIS SEDGB',pageW/2,8,{align:'center'});
+  doc.setFontSize(9);doc.setFont('helvetica','normal');doc.text('DDO Attendance Summary Report',pageW/2,15,{align:'center'});
+  doc.setTextColor(30,58,95);doc.setFontSize(8);
+  doc.text('Period: '+getPeriod()+'  |  '+getActiveFiltersLabel()+'  |  Generated: '+nowStr(),14,25);
+  doc.setDrawColor(26,86,219);doc.setLineWidth(0.4);doc.line(14,28,pageW-14,28);
+  const totW=data.reduce((s,r)=>s+r.working,0),totP=data.reduce((s,r)=>s+r.present,0);
+  if(doc.autoTable){doc.autoTable({
+    head:[['#','DDO Code','DDO Name','District','Cat.','Total','Present','Absent','Att %','Status']],
+    body:data.map((r,i)=>[i+1,(r.office.match(/^[A-Z]+\d+/)||['—'])[0],r.office,r.district,r.category,r.total,r.present,r.absent,(r.pct*100).toFixed(1)+'%',r.pct>=0.87?'On Target':r.pct>=0.76?'Needs Attention':'Critical']),
+    foot:[['','TOTAL — '+data.length,'','','',data.reduce((s,r)=>s+r.total,0),totP,data.reduce((s,r)=>s+r.absent,0),totW>0?((totP/totW)*100).toFixed(1)+'%':'—','']],
+    startY:31,margin:{left:8,right:8,bottom:14},
+    styles:{fontSize:7.5,cellPadding:2.5,overflow:'ellipsize',textColor:[15,23,42]},
+    headStyles:{fillColor:[30,58,95],textColor:[255,255,255],fontStyle:'bold',fontSize:8},
+    footStyles:{fillColor:[241,245,249],textColor:[15,23,42],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[248,250,252]},bodyStyles:{textColor:[15,23,42]},
+    bodyStyles:{textColor:[15,23,42]},
+    willDrawCell:function(d){ // ★ #12 colour coded status + red absent
+      if(d.section==='body'){
+        if(d.column.index===9){const v=d.cell.raw;if(v==='On Target'){d.cell.styles.textColor=[5,150,105];d.cell.styles.fontStyle='bold';}else if(v==='Critical'){d.cell.styles.textColor=[220,38,38];d.cell.styles.fontStyle='bold';}else if(v==='Needs Attention'){d.cell.styles.textColor=[217,119,6];d.cell.styles.fontStyle='bold';}}
+        if(d.column.index===7&&parseInt(d.cell.raw)>0){d.cell.styles.textColor=[220,38,38];d.cell.styles.fontStyle='bold';}
+      }
+    },
+    didDrawPage:function(d){
+      if(d.pageNumber>1){doc.setFillColor(30,58,95);doc.rect(0,0,pageW,9,'F');doc.setTextColor(255,255,255);doc.setFontSize(8);doc.setFont('helvetica','bold');doc.text('EMIS SEDGB — DDO Attendance Summary',pageW/2,6,{align:'center'});}
+      doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(120,120,140);
+      doc.text('EMIS SEDGB | Confidential — For Official Use Only',8,pageH-4);doc.text('Designed and Developed by Muhammad Hassan Assistant IT EMIS',pageW/2,pageH-4,{align:'center'});
+      doc.text('Page '+d.pageNumber,pageW-8,pageH-4,{align:'right'});
+    }
+  });}
+  doc.save('EMIS_SEDGB_Attendance_Summary_'+ts+'.pdf');
+}
+
+async function exportFullData(format){
+  const sv2=document.getElementById('rptFullSort').value;
+  const cv=document.getElementById('rptFullCat').value;
+  let data=[...filteredData];
+  if(cv!=='all')data=data.filter(r=>r.category===cv);
+  if(sv2==='pct_desc')data.sort((a,b)=>b.pct-a.pct);else if(sv2==='pct_asc')data.sort((a,b)=>a.pct-b.pct);else if(sv2==='absent_desc')data.sort((a,b)=>b.absent-a.absent);else if(sv2==='emp_desc')data.sort((a,b)=>b.total-a.total);else data.sort((a,b)=>a.office.localeCompare(b.office));
+  const ts=nowFile();const name='Full_Data_'+ts;
+  if(format==='csv'){downloadCSV([['#','DDO Code','DDO Name','District','Category','Dept','Total','Present','Absent','Leaves','Holidays','Working','Att %','Abs %'],...data.map((r,i)=>[i+1,(r.office.match(/^[A-Z]+\d+/)||['—'])[0],r.office,r.district,r.category,r.dept,r.total,r.present,r.absent,r.leaves,r.holidays,r.working,(r.pct*100).toFixed(2),(r.absentPct*100).toFixed(2)])],'EMIS_SEDGB_'+name);}
+  else if(format==='xlsx'){const ws_data=[['EMIS SEDGB — Full Data Export'],['Filters: '+getActiveFiltersLabel()+' | Generated: '+nowStr()],[],['#','DDO Code','DDO Name','District','Category','Department','Total','Present','Absent','Leaves','Holidays','Working','Att %','Abs %'],...data.map((r,i)=>[i+1,(r.office.match(/^[A-Z]+\d+/)||['—'])[0],r.office,r.district,r.category,r.dept,r.total,r.present,r.absent,r.leaves,r.holidays,r.working,+(r.pct*100).toFixed(2),+(r.absentPct*100).toFixed(2)])];const ws=XLSX.utils.aoa_to_sheet(ws_data);ws['!cols']=[{wch:5},{wch:12},{wch:48},{wch:11},{wch:10},{wch:26},{wch:8},{wch:8},{wch:8},{wch:7},{wch:9},{wch:12},{wch:12},{wch:11}];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Full Data');XLSX.writeFile(wb,'EMIS_SEDGB_'+name+'.xlsx');}
+  else if(format==='pdf'){
+    const {jsPDF}=window.jspdf;if(!jsPDF)return;
+    const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+    const pageW=doc.internal.pageSize.getWidth(),pageH=doc.internal.pageSize.getHeight();
+    doc.setFillColor(30,58,95);doc.rect(0,0,pageW,18,'F');doc.setTextColor(255,255,255);doc.setFontSize(11);doc.setFont('helvetica','bold');doc.text('EMIS SEDGB — Full Data Export',pageW/2,7,{align:'center'});doc.setFontSize(8);doc.setFont('helvetica','normal');doc.text('Period: '+getPeriod()+' | Generated: '+nowStr()+' | Records: '+data.length,pageW/2,14,{align:'center'});
+    const totW=data.reduce((s,r)=>s+r.working,0),totP=data.reduce((s,r)=>s+r.present,0);
+    if(doc.autoTable){doc.autoTable({head:[['#','DDO Code','DDO Name','District','Cat.','Total','Present','Absent','Att %','Abs %']],body:data.map((r,i)=>[i+1,(r.office.match(/^[A-Z]+\d+/)||['—'])[0],r.office,r.district,r.category,r.total,r.present,r.absent,(r.pct*100).toFixed(1)+'%',(r.absentPct*100).toFixed(1)+'%']),foot:[['','TOTAL','','','',data.reduce((s,r)=>s+r.total,0),totP,data.reduce((s,r)=>s+r.absent,0),totW>0?((totP/totW)*100).toFixed(1)+'%':'—','']],startY:20,margin:{left:8,right:8,bottom:12},styles:{fontSize:7,cellPadding:2.2,overflow:'ellipsize'},headStyles:{fillColor:[30,58,95],textColor:255,fontStyle:'bold'},footStyles:{fillColor:[241,245,249],fontStyle:'bold'},alternateRowStyles:{fillColor:[248,250,252]},willDrawCell:function(d){if(d.section==='body'&&d.column.index===7&&parseInt(d.cell.raw)>0){d.cell.styles.textColor=[220,38,38];d.cell.styles.fontStyle='bold';}},didDrawPage:function(d){if(d.pageNumber>1){doc.setFillColor(30,58,95);doc.rect(0,0,pageW,9,'F');doc.setTextColor(255,255,255);doc.setFontSize(8);doc.setFont('helvetica','bold');doc.text('EMIS SEDGB — Full Data Export',pageW/2,6,{align:'center'});}doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(120,120,140);doc.text('EMIS SEDGB | Confidential',8,pageH-4);doc.text('Designed and Developed by Muhammad Hassan Assistant IT EMIS',pageW/2,pageH-4,{align:'center'});doc.text('Page '+d.pageNumber,pageW-8,pageH-4,{align:'right'});}});}
+    doc.save('EMIS_SEDGB_'+name+'.pdf');
+  }
+}
+
+// ═══════════════════════════════════════════
+// CSV
+// ═══════════════════════════════════════════
+function downloadCSV(rows,filename){
+  const csv=rows.map(r=>r.map(v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename+'.csv';a.click();URL.revokeObjectURL(url);
+}
+
+// ═══════════════════════════════════════════
+// DRILL DOWN MODALS
+// ═══════════════════════════════════════════
+function drillTableHTML(rows){
+  const totW=rows.reduce((s,r)=>s+r.working,0),totP=rows.reduce((s,r)=>s+r.present,0);
+  return'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#1e3a5f;color:#fff">'+['#','DDO Name','Category','Total','Present','Absent','Leaves','Att %','Status'].map(h=>'<th style="padding:6px 10px;text-align:left;font-size:9px;white-space:nowrap">'+h+'</th>').join('')+'</tr></thead>'
+  +'<tbody>'+rows.map((r,i)=>'<tr style="background:'+(i%2===0?'var(--surface)':'var(--surface-2)')+';border-bottom:1px solid var(--border)">'
+  +'<td style="padding:5px 10px">'+(i+1)+'</td>'
+  +'<td style="padding:5px 10px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+r.office+'">'+r.office+'</td>'
+  +'<td style="padding:5px 10px">'+catBadge(r.category)+'</td>'
+  +'<td style="padding:5px 10px">'+fmt(r.total)+'</td><td style="padding:5px 10px">'+fmt(r.present)+'</td>'
+  +'<td style="padding:5px 10px;color:#dc2626;font-weight:700">'+fmt(r.absent)+'</td>'
+  +'<td style="padding:5px 10px">'+fmt(r.leaves)+'</td>'
+  +'<td style="padding:5px 10px">'+pctBadge(r.pct)+'</td>'
+  +'<td style="padding:5px 10px">'+trafficLight(r.pct)+'</td>'
+  +'</tr>').join('')+'</tbody>'
+  +'<tfoot><tr style="background:var(--surface-3);font-weight:700"><td colspan="3" style="padding:6px 10px">TOTAL ('+rows.length+')</td><td style="padding:6px 10px">'+fmt(rows.reduce((s,r)=>s+r.total,0))+'</td><td style="padding:6px 10px">'+fmt(totP)+'</td><td style="padding:6px 10px;color:#dc2626">'+fmt(rows.reduce((s,r)=>s+r.absent,0))+'</td><td style="padding:6px 10px">'+fmt(rows.reduce((s,r)=>s+r.leaves,0))+'</td><td style="padding:6px 10px">'+pctBadge(totW>0?totP/totW:0)+'</td><td style="padding:6px 10px">'+trafficLight(totW>0?totP/totW:0)+'</td></tr></tfoot></table></div>';
+}
+function showModal(title,bodyHTML,rows,exportName){
+  document.getElementById('drillTitle').textContent=title;
+  document.getElementById('drillBody').innerHTML=bodyHTML;
+  drillRows=rows||[];
+  const eb=document.getElementById('drillExportBtns');
+  eb.innerHTML=drillRows.length&&exportName?
+    '<button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="drillExport(\'jpg\',\''+exportName+'\')">📷</button>'+
+    '<button class="btn btn-sm" style="background:#dc2626;color:#fff" onclick="drillExport(\'pdf\',\''+exportName+'\')">📄</button>'+
+    '<button class="btn btn-sm" style="background:#059669;color:#fff" onclick="drillExport(\'csv\',\''+exportName+'\')">📊</button>'+
+    '<button class="btn btn-sm" style="background:#1a56db;color:#fff" onclick="drillExport(\'xlsx\',\''+exportName+'\')">📗</button>':'';
+  document.getElementById('drillModal').classList.add('open');
+}
+function closeModal(){document.getElementById('drillModal').classList.remove('open');drillRows=[];}
+document.getElementById('drillModal').addEventListener('click',function(e){if(e.target.id==='drillModal')closeModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+
+async function drillExport(format,name){
+  if(format==='jpg'){const cv=await html2canvas(document.getElementById('drillBody'),{scale:2.5,useCORS:true,backgroundColor:isDark()?'#1e293b':'#ffffff',logging:false});const a=document.createElement('a');a.href=cv.toDataURL('image/jpeg',0.95);a.download='EMIS_SEDGB_'+name+'.jpg';a.click();}
+  else if(format==='csv'){downloadCSV([['#','DDO Name','District','Category','Total','Present','Absent','Leaves','Att %','Status'],...drillRows.map((r,i)=>[i+1,r.office,r.district,r.category,r.total,r.present,r.absent,r.leaves,(r.pct*100).toFixed(2),r.pct>=0.87?'On Target':r.pct>=0.76?'Needs Attention':'Critical'])],'EMIS_SEDGB_'+name);}
+  else if(format==='xlsx'){const ws_data=[['EMIS SEDGB — Drill-Down Report'],['Generated: '+nowStr()],[],['#','DDO Name','District','Category','Total','Present','Absent','Leaves','Att %','Status'],...drillRows.map((r,i)=>[i+1,r.office,r.district,r.category,r.total,r.present,r.absent,r.leaves,+(r.pct*100).toFixed(2),r.pct>=0.87?'On Target':r.pct>=0.76?'Needs Attention':'Critical'])];const ws=XLSX.utils.aoa_to_sheet(ws_data);ws['!cols']=[{wch:5},{wch:50},{wch:12},{wch:10},{wch:8},{wch:8},{wch:8},{wch:7},{wch:11},{wch:16}];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'DrillDown');XLSX.writeFile(wb,'EMIS_SEDGB_'+name+'.xlsx');}
+  else if(format==='pdf'){const {jsPDF}=window.jspdf;const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});const pageW=doc.internal.pageSize.getWidth(),pageH=doc.internal.pageSize.getHeight();doc.setFillColor(30,58,95);doc.rect(0,0,pageW,16,'F');doc.setTextColor(255,255,255);doc.setFontSize(10);doc.setFont('helvetica','bold');doc.text('EMIS SEDGB — '+name.replace(/_/g,' '),pageW/2,6,{align:'center'});doc.setFontSize(8);doc.setFont('helvetica','normal');doc.text('Generated: '+nowStr(),pageW/2,13,{align:'center'});if(doc.autoTable){doc.autoTable({head:[['#','DDO Name','District','Category','Total','Present','Absent','Att %','Status']],body:drillRows.map((r,i)=>[i+1,r.office,r.district,r.category,r.total,r.present,r.absent,(r.pct*100).toFixed(1)+'%',r.pct>=0.87?'On Target':r.pct>=0.76?'Needs Attention':'Critical']),startY:18,margin:{left:8,right:8,bottom:10},styles:{fontSize:8,cellPadding:2.5,overflow:'ellipsize'},headStyles:{fillColor:[30,58,95],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[248,250,252]},didDrawPage:function(d){doc.setFontSize(7);doc.setTextColor(120,120,140);doc.text('EMIS SEDGB | Confidential',8,pageH-4);doc.text('Designed and Developed by Muhammad Hassan Assistant IT EMIS',pageW/2,pageH-4,{align:'center'});doc.text('Page '+d.pageNumber,pageW-8,pageH-4,{align:'right'});}});}doc.save('EMIS_SEDGB_'+name+'.pdf');}
+}
+
+function showKpiDrill(label){
+  let rows;
+  if(label.includes('100%')||label.includes('Full'))rows=filteredData.filter(r=>r.pct>=1);
+  else if(label.includes('Zero'))rows=filteredData.filter(r=>r.pct===0);
+  else if(label.includes('87%')||label.includes('Target'))rows=filteredData.filter(r=>r.pct>=0.87);
+  else rows=filteredData.slice(0,50);
+  rows=[...rows].sort((a,b)=>b.pct-a.pct);
+  showModal(label,drillTableHTML(rows),rows,label.replace(/[\s/]+/g,'_').substring(0,40)+'_'+nowFile());
+}
+function showDistrictDrill(district){
+  const rows=[...filteredData.filter(r=>r.district===district)].sort((a,b)=>b.pct-a.pct);
+  showModal(district+' — '+rows.length+' DDOs',drillTableHTML(rows),rows,district+'_DrillDown_'+nowFile());
+}
+function showInstDrill(r){
+  if(!r||!r.office)return;
+  showModal(r.office,
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:9px;margin-bottom:14px">'+
+    [['District',r.district],['Category',r.category||'—'],['Total Emp',fmt(r.total)],['Present',fmt(r.present)],['Absent',fmt(r.absent)],['Leaves',fmt(r.leaves)],['Holidays',fmt(r.holidays)],['Working',fmt(r.working)],['Attendance',pctStr(r.pct)],['Absence',pctStr(r.absentPct)]].map(([k,v])=>'<div style="background:var(--surface-2);border-radius:7px;padding:10px;border:1.5px solid var(--border)"><div style="font-size:9px;font-weight:700;color:var(--text-2);text-transform:uppercase;margin-bottom:3px">'+k+'</div><div style="font-size:16px;font-weight:700;color:var(--text-1)">'+v+'</div></div>').join('')+'</div>'+
+    '<p style="font-size:11px;margin-bottom:5px"><strong>DDO Code:</strong> <code style="background:var(--surface-2);padding:2px 5px;border-radius:3px">'+(r.office.match(/^[A-Z]+\d+/)||['—'])[0]+'</code></p>'+
+    '<p style="font-size:11px;margin-bottom:11px;word-break:break-word"><strong>Full Name:</strong> '+r.office+'</p>'+
+    pctBar(r.pct)+'<div style="margin-top:8px">'+trafficLight(r.pct)+'</div>',
+  [r],r.office.replace(/\s+/g,'_').substring(0,30)+'_'+nowFile());
+}
+function showHeatDrill(district,date){
+  let rows=[...(allSheetData[date]||[]).filter(r=>r.district===district)];
+  if(currentCategory!=='all')rows=rows.filter(r=>r.category===currentCategory);
+  rows.sort((a,b)=>b.pct-a.pct);
+  showModal(district+' — '+date,drillTableHTML(rows),rows,district+'_'+date);
+}
+
+// ═══════════════════════════════════════════
+// TAB NAVIGATION
+// ═══════════════════════════════════════════
+document.querySelectorAll('.navtab').forEach(tab=>{
+  tab.addEventListener('click',function(){
+    document.querySelectorAll('.navtab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+    this.classList.add('active');
+    document.getElementById('tab-'+this.dataset.tab).classList.add('active');
+    const t=this.dataset.tab;
+    if(t==='trends')renderTrends();
+    if(t==='heatmap')setTimeout(renderHeatmap,50);
+    if(t==='reports'){renderAttReport();setTimeout(renderDistrictReport,80);}
+    if(t==='explorer')renderExplorer();
+    if(t==='districts'){setTimeout(renderDistrictTab,50);}
+  });
+});
+
+</script>
+</body>
+</html>
