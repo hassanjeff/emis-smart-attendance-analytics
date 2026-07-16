@@ -243,12 +243,40 @@ tfoot td{padding:8px 13px;font-weight:700;font-size:12px;background:var(--surfac
 
   document.documentElement.style.visibility = 'hidden';
 
-  window.__supabase.auth.getSession().then(({ data: { session } }) => {
+  window.__supabase.auth.getSession().then(async ({ data: { session } }) => {
     if (!session) {
       window.location.href = 'login.html';
       return;
     }
     window.__currentUser = session.user;
+
+    // ── Phase 3: fetch role + district from profiles table ──
+    // District Admins only ever see rows matching their own district;
+    // Superadmins see everything (window.__userDistrict stays null).
+    try {
+      const { data: profile, error } = await window.__supabase
+        .from('profiles')
+        .select('role, district, full_name')
+        .eq('id', session.user.id)
+        .single();
+
+      if (error || !profile) {
+        console.warn('No profile row found for this user — defaulting to no access restriction removed, but also no elevated access.', error);
+        window.__userRole = null;
+        window.__userDistrict = null;
+        window.__userFullName = null;
+      } else {
+        window.__userRole = profile.role || null;
+        window.__userDistrict = (profile.role === 'district_admin') ? (profile.district || null) : null;
+        window.__userFullName = profile.full_name || null;
+      }
+    } catch (e) {
+      console.warn('Profile fetch failed:', e);
+      window.__userRole = null;
+      window.__userDistrict = null;
+      window.__userFullName = null;
+    }
+
     document.documentElement.style.visibility = 'visible';
   });
 
@@ -260,6 +288,28 @@ tfoot td{padding:8px 13px;font-weight:700;font-size:12px;background:var(--surfac
 })();
 </script>
 <!-- ══════════ END AUTH GUARD ══════════ -->
+<!-- ══════════ ROLE BADGE (Phase 3) — must run after AUTH GUARD sets window.__userRole ══════════ -->
+<script>
+(function(){
+  function initRoleBadge(){
+    if (typeof window.__userRole === 'undefined') { setTimeout(initRoleBadge, 100); return; }
+    const badge = document.getElementById('roleBadge');
+    if (!badge) return;
+    if (window.__userRole === 'district_admin' && window.__userDistrict) {
+      badge.textContent = 'District Admin — ' + window.__userDistrict;
+      badge.style.background = 'rgba(255,255,255,.15)';
+    } else if (window.__userRole === 'superadmin') {
+      badge.textContent = 'Superadmin — All Districts';
+      badge.style.background = 'rgba(255,255,255,.15)';
+    } else {
+      badge.textContent = 'No role assigned — contact admin';
+      badge.style.background = 'rgba(220,38,38,.4)';
+    }
+  }
+  initRoleBadge();
+})();
+</script>
+<!-- ══════════ END ROLE BADGE ══════════ -->
 <div id="libErr" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#dc2626;color:#fff;padding:9px;text-align:center;font-size:12px;font-weight:600">⚠️ Excel library failed to load. Check your connection and press Ctrl+F5.</div>
 
 <!-- TOPBAR -->
@@ -273,6 +323,7 @@ tfoot td{padding:8px 13px;font-weight:700;font-size:12px;background:var(--surfac
     <div class="live-clock" id="liveClock"></div>
     <!-- User info + Logout (Phase 1) -->
     <div id="userInfoBox" style="display:flex;align-items:center;gap:8px;font-size:11px;background:rgba(255,255,255,.1);padding:3px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.15)">
+      <span id="roleBadge" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px">—</span>
       <span id="userEmailDisplay">—</span>
       <button id="logoutBtn" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:#fff;padding:3px 9px;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit">Logout</button>
     </div>
@@ -848,10 +899,24 @@ function processFile(file){
               category:classifyDDO(office),total,present,absent,leaves,holidays,working,
               pct,absentPct:working>0?Math.min(1,Math.max(0,absent/working)):0,date:sn};
           }).filter(Boolean);
-          if(rows.length>0)allSheetData[sn]=rows;
+          // ── Phase 3: District Admins only ever see their own district's rows.
+          // This is the single choke point all data flows through, so every
+          // chart, map, table, and export downstream inherits the restriction
+          // automatically — nothing else needed to change.
+          const scopedRows = (window.__userDistrict)
+            ? rows.filter(r => r.district === window.__userDistrict)
+            : rows;
+          if(scopedRows.length>0)allSheetData[sn]=scopedRows;
         }catch(err){console.warn('Sheet '+sn+':',err.message);}
       });
-      if(!Object.keys(allSheetData).length){alert('No valid data found. Check file format.');setUploading(false);return;}
+      if(!Object.keys(allSheetData).length){
+        if(window.__userDistrict){
+          alert('No data found for your district ("'+window.__userDistrict+'") in this file. Check that the district name in your profile exactly matches the district names used in the workbook, and that the file actually contains rows for your district.');
+        } else {
+          alert('No valid data found. Check file format.');
+        }
+        setUploading(false);return;
+      }
       initDashboard();
     }catch(err){alert('Error reading file: '+err.message);}
     finally{setUploading(false);}
