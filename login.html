@@ -25,12 +25,42 @@ body{
   min-height:100vh;font-size:14px;display:flex;align-items:center;justify-content:center;
   padding:20px;
 }
-.login-shell{width:100%;max-width:400px}
+.page-shell{width:100%;max-width:880px;display:grid;grid-template-columns:1fr 1fr;border-radius:14px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.12)}
+@media(max-width:760px){.page-shell{grid-template-columns:1fr;max-width:400px}}
+
+/* ── Message panel ── */
+.msg-panel{
+  background:linear-gradient(160deg,#1e3a5f 0%,#1a56db 60%,#1e40af 100%);
+  color:#fff;padding:38px 34px;display:flex;flex-direction:column;justify-content:space-between;
+  position:relative;overflow:hidden;min-height:420px;
+}
+.msg-panel::before{
+  content:'';position:absolute;inset:0;opacity:.08;pointer-events:none;
+  background-image:radial-gradient(circle at 20% 20%, #fff 0, transparent 40%),
+                    radial-gradient(circle at 85% 75%, #fff 0, transparent 35%);
+}
+.msg-panel-top{position:relative;z-index:1}
+.msg-eyebrow{font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;opacity:.7;margin-bottom:14px}
+.msg-track{position:relative;min-height:170px}
+.msg-slide{position:absolute;inset:0;opacity:0;transform:translateY(6px);transition:opacity .5s ease,transform .5s ease;pointer-events:none}
+.msg-slide.active{opacity:1;transform:translateY(0);pointer-events:auto}
+.msg-slide p{font-size:16.5px;line-height:1.6;font-weight:400;letter-spacing:-.1px}
+.msg-slide .msg-tag{display:flex;align-items:center;gap:7px;margin-top:16px;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;opacity:.7}
+.msg-slide .msg-tag svg{width:13px;height:13px;flex-shrink:0}
+.msg-dots{position:relative;z-index:1;display:flex;gap:6px;margin-top:18px}
+.msg-dot{position:relative;width:28px;height:3px;border-radius:2px;background:rgba(255,255,255,.25);cursor:pointer;overflow:hidden}
+.msg-dot .fill{position:absolute;inset:0;background:#fff;width:0%;transform-origin:left}
+.msg-dot.active .fill{animation:fillbar 6s linear forwards}
+@keyframes fillbar{from{width:0%}to{width:100%}}
+.msg-panel-bottom{position:relative;z-index:1;font-size:11px;opacity:.6;line-height:1.6;border-top:1px solid rgba(255,255,255,.15);padding-top:14px;margin-top:20px;display:flex;align-items:center;justify-content:space-between}
+.msg-panel-bottom .org{font-weight:600;opacity:.85}
+
+.login-shell{width:100%}
 
 .brand-header{
   background:linear-gradient(135deg,#1e3a5f 0%,#1a56db 100%);
-  color:#fff;border-radius:14px 14px 0 0;padding:28px 30px 24px;
-  display:flex;align-items:center;gap:14px;box-shadow:0 2px 16px rgba(0,0,0,.15);
+  color:#fff;padding:28px 30px 24px;
+  display:none;align-items:center;gap:14px;
 }
 .brand-logo{
   width:44px;height:44px;background:rgba(255,255,255,.15);border-radius:9px;
@@ -41,8 +71,8 @@ body{
 .brand-sub{font-size:11px;opacity:.75;margin-top:2px}
 
 .login-card{
-  background:var(--surface);border-radius:0 0 14px 14px;padding:30px;
-  box-shadow:0 8px 30px rgba(0,0,0,.1);border:1px solid var(--border);border-top:none;
+  background:var(--surface);padding:34px 30px;
+  height:100%;
 }
 
 .login-card h2{font-size:15px;font-weight:700;margin-bottom:4px;color:var(--text-1)}
@@ -84,16 +114,64 @@ body{
 </head>
 <body>
 
-<div class="login-shell">
-  <div class="brand-header">
-    <div class="brand-logo">EMIS<br>SEDGB</div>
-    <div>
-      <div class="brand-title">EMIS SEDGB</div>
-      <div class="brand-sub">School Education Department — Gilgit-Baltistan</div>
+<div class="page-shell">
+
+  <div class="msg-panel">
+    <div class="msg-panel-top">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:26px">
+        <div class="brand-logo">EMIS<br>SEDGB</div>
+        <div>
+          <div class="brand-title">EMIS SEDGB</div>
+          <div class="brand-sub">School Education Department — Gilgit-Baltistan</div>
+        </div>
+      </div>
+
+      <div class="msg-eyebrow">EMIS Section · Directorate of Education, GB</div>
+      <div class="msg-track" id="msgTrack">
+        <div class="msg-slide active">
+          <p>The EMIS Section exists to turn scattered district attendance sheets into one clear, real-time record — giving the Directorate a single source of truth across all ten districts.</p>
+          <span class="msg-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"/></svg>Our Mandate</span>
+        </div>
+        <div class="msg-slide">
+          <p>This system replaces manual spreadsheet merging with centralized data entry — cutting turnaround time from days to minutes, and removing the errors that come with copying numbers by hand.</p>
+          <span class="msg-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>Efficiency</span>
+        </div>
+        <div class="msg-slide">
+          <p>Consistent attendance data doesn't just report the past — it flags patterns early, before a few missed school days become a dropout risk.</p>
+          <span class="msg-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L14.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>Early Warning</span>
+        </div>
+        <div class="msg-slide">
+          <p>District Deputy Directors see their own district clearly. Director EMIS and Deputy Director EMIS see the full picture across all ten. Same data, the right view for every role.</p>
+          <span class="msg-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="7" height="10" rx="1"/><rect x="14" y="6" width="7" height="15" rx="1"/><rect x="3" y="3" width="7" height="4" rx="1"/></svg>Role-Based Access</span>
+        </div>
+        <div class="msg-slide">
+          <p>Reliable, up-to-date attendance data is one of the clearest signals the Directorate has for deciding where support and resources are needed most.</p>
+          <span class="msg-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>Resource Allocation</span>
+        </div>
+        <div class="msg-slide">
+          <p>Education systems worldwide are shifting from static year-end reports to real-time monitoring. This system brings that same standard of visibility to SED GB.</p>
+          <span class="msg-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18Z"/></svg>International Standard</span>
+        </div>
+      </div>
+      <div class="msg-dots" id="msgDots"></div>
+    </div>
+
+    <div class="msg-panel-bottom">
+      <span class="org">EMIS Smart Attendance Analytics</span>
+      <span>School Education Department · GB</span>
     </div>
   </div>
 
-  <div class="login-card">
+  <div class="login-shell">
+    <div class="brand-header">
+      <div class="brand-logo">EMIS<br>SEDGB</div>
+      <div>
+        <div class="brand-title">EMIS SEDGB</div>
+        <div class="brand-sub">School Education Department — Gilgit-Baltistan</div>
+      </div>
+    </div>
+
+    <div class="login-card">
     <h2>Sign in to your account</h2>
     <p class="lead">Access the attendance monitoring dashboard</p>
 
@@ -115,13 +193,62 @@ body{
       </button>
     </form>
 
+    <div style="text-align:center;margin-top:14px">
+      <a href="#" id="forgotLink" style="font-size:11px;color:var(--primary);font-weight:600;text-decoration:none">Forgot password?</a>
+    </div>
+
+    <form id="forgotForm" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+      <div class="fg">
+        <label>Email</label>
+        <input type="email" id="forgotEmail" required placeholder="you@gb.gov.pk">
+      </div>
+      <button type="submit" class="btn-login" id="forgotBtn">
+        <div class="spinner" id="forgotSpinner"></div>
+        <span id="forgotBtnText">Send Reset Link</span>
+      </button>
+    </form>
+
     <div class="footer-note">
       Access is provisioned by the EMIS Section.<br>
       Contact your administrator if you need an account or a password reset.
     </div>
+    </div>
   </div>
 </div>
 
+<script>
+// ── Rotating education-message panel ──
+(function(){
+  const slides = document.querySelectorAll('.msg-slide');
+  const dotsWrap = document.getElementById('msgDots');
+  let current = 0;
+  let timer = null;
+
+  slides.forEach((_, i) => {
+    const dot = document.createElement('div');
+    dot.className = 'msg-dot' + (i === 0 ? ' active' : '');
+    dot.innerHTML = '<div class="fill"></div>';
+    dot.addEventListener('click', () => goTo(i));
+    dotsWrap.appendChild(dot);
+  });
+  const dots = document.querySelectorAll('.msg-dot');
+
+  function goTo(i){
+    slides[current].classList.remove('active');
+    dots[current].classList.remove('active');
+    current = i;
+    slides[current].classList.add('active');
+    dots[current].classList.add('active');
+    resetTimer();
+  }
+  function next(){ goTo((current + 1) % slides.length); }
+  function resetTimer(){
+    clearInterval(timer);
+    timer = setInterval(next, 6000);
+  }
+  resetTimer();
+})();
+</script>
 <script>
 // ── Supabase config ────────────────────────────────────────
 // Replace these two values with your actual Supabase project credentials
@@ -186,6 +313,43 @@ form.addEventListener('submit', async (e) => {
     showInfo('Signed in — redirecting…');
     setTimeout(() => { window.location.href = 'index.html'; }, 400);
   }
+});
+
+// ── Forgot password ──
+const forgotLink = document.getElementById('forgotLink');
+const forgotForm = document.getElementById('forgotForm');
+const loginForm = document.getElementById('loginForm');
+
+forgotLink.addEventListener('click', (e) => {
+  e.preventDefault();
+  const showing = forgotForm.style.display === 'block';
+  forgotForm.style.display = showing ? 'none' : 'block';
+  forgotLink.textContent = showing ? 'Forgot password?' : 'Back to sign in';
+  errorAlert.style.display = 'none';
+  infoAlert.style.display = 'none';
+});
+
+forgotForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('forgotEmail').value.trim();
+  const btn = document.getElementById('forgotBtn');
+  const spinner = document.getElementById('forgotSpinner');
+  const btnText = document.getElementById('forgotBtnText');
+
+  btn.disabled = true; spinner.style.display = 'block'; btnText.textContent = 'Sending…';
+
+  const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + '/reset-password.html',
+  });
+
+  btn.disabled = false; spinner.style.display = 'none'; btnText.textContent = 'Send Reset Link';
+
+  if (error) {
+    showError(error.message);
+    return;
+  }
+  showInfo('If an account exists for that email, a reset link has been sent. Check your inbox.');
+  forgotForm.reset();
 });
 </script>
 </body>
