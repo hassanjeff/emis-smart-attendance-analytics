@@ -314,10 +314,29 @@ tfoot td{padding:8px 13px;font-weight:700;font-size:12px;background:var(--surfac
 <!-- ══════════ END ROLE BADGE ══════════ -->
 <!-- ══════════ PHASE 6: ATTENDANCE IMPORT MODULE ══════════ -->
 <script>
+// ── Date helpers ──────────────────────────────────────────
+// Sheet names / the app's internal date keys are "DD-MM-YYYY" strings.
+// The real `attendance.attendance_date` column is a SQL `date` type, which
+// needs proper ISO "YYYY-MM-DD" strings — these convert between the two.
+function ddmmyyyyToISO(s){
+  const [d,m,y]=s.split('-');
+  return y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+}
+function isoToDdmmyyyy(s){
+  const [y,m,d]=s.split('-');
+  return String(d).padStart(2,'0')+'-'+String(m).padStart(2,'0')+'-'+y;
+}
+
 // ── Load existing attendance data from Supabase into the dashboard ──
 // Runs automatically on startup for everyone (superadmins see all districts,
 // district admins automatically see only their own via RLS on the `attendance`
 // table), and can also be triggered manually via the Refresh button.
+//
+// IMPORTANT: the real `attendance` table only stores the RAW imported fields
+// (total_employees, checked_in, leaves, absent, holidays, progress) — not the
+// derived present/absent/working/pct values. So loading from the database
+// re-runs the exact same derivation logic as processFile() does for a fresh
+// Excel upload, to guarantee identical numbers either way.
 async function loadFromDatabase(manual){
   const btn = document.getElementById('refreshDbBtn');
   if (manual && btn) { btn.disabled = true; btn.textContent = '🔄 Loading…'; }
@@ -326,7 +345,7 @@ async function loadFromDatabase(manual){
     const { data, error } = await window.__supabase
       .from('attendance')
       .select('*')
-      .order('date', { ascending: true });
+      .order('attendance_date', { ascending: true });
 
     if (error) {
       console.warn('Could not load attendance from database:', error);
@@ -339,15 +358,39 @@ async function loadFromDatabase(manual){
     }
 
     allSheetData = {}; filteredData = []; tableData = []; destroyAllCharts();
-    data.forEach(r => {
+    data.forEach(raw => {
+      const dateKey = isoToDdmmyyyy(raw.attendance_date);
+      const total = raw.total_employees || 0;
+      const checkedIn = raw.checked_in || 0;
+      const working = raw.working_shifts || total || 1;
+      const leaves = raw.leaves || 0;
+      const holidays = raw.holidays || 0;
+      const absentRaw = raw.absent || 0;
+      const progressRaw = parseFloat(raw.progress || 0) || 0;
+
+      // ── Mirrors processFile()'s present/absent derivation exactly ──
+      let present, absent;
+      if (checkedIn > 0) {
+        present = checkedIn;
+        absent = absentRaw > 0 ? absentRaw : Math.max(0, working - checkedIn - leaves - holidays);
+      } else {
+        present = absentRaw > 0 ? Math.max(0, working - absentRaw - leaves - holidays) : Math.round(progressRaw * working);
+        absent = absentRaw > 0 ? absentRaw : Math.max(0, working - present - leaves - holidays);
+      }
+      present = Math.max(0, present); absent = Math.max(0, absent);
+      const pct = working > 0 ? Math.min(1, Math.max(0, present / working)) : Math.min(1, Math.max(0, progressRaw));
+      const absentPct = working > 0 ? Math.min(1, Math.max(0, absent / working)) : 0;
+
       const row = {
-        office: r.office, dept: r.dept, district: r.district, category: r.category,
-        total: r.total, present: r.present, absent: r.absent, leaves: r.leaves,
-        holidays: r.holidays, working: r.working, pct: r.pct, absentPct: r.absent_pct,
-        date: r.date,
+        office: raw.office,
+        dept: '', // not stored in this table — not used for any calculation, safe to leave blank
+        district: raw.district,
+        category: classifyDDO(raw.office),
+        total, present, absent, leaves, holidays, working, pct, absentPct,
+        date: dateKey, checkedIn,
       };
-      if (!allSheetData[r.date]) allSheetData[r.date] = [];
-      allSheetData[r.date].push(row);
+      if (!allSheetData[dateKey]) allSheetData[dateKey] = [];
+      allSheetData[dateKey].push(row);
     });
     initDashboard();
     return true;
@@ -363,16 +406,29 @@ async function loadFromDatabase(manual){
 // ── Push a freshly uploaded workbook into Supabase (superadmin only) ──
 // Called automatically right after a successful Excel parse. District Admins
 // never call this — per the original access design, only superadmins import.
+// Saves the RAW fields only (matching the real table structure) — derived
+// values (present/absent/pct) are recomputed on load, not stored redundantly.
 async function syncToDatabase(){
   if (window.__userRole !== 'superadmin') return;
 
   const allRows = Object.entries(allSheetData).flatMap(([date, rows]) =>
-    rows.map(r => ({
-      date, office: r.office, dept: r.dept, district: r.district, category: r.category,
-      total: r.total, present: r.present, absent: r.absent, leaves: r.leaves,
-      holidays: r.holidays, working: r.working, pct: r.pct, absent_pct: r.absentPct,
-      uploaded_by: window.__currentUser.id,
-    }))
+    rows.map(r => {
+      const codeMatch = r.office.match(/^([A-Z]{2,3}\d+)/);
+      return {
+        attendance_date: ddmmyyyyToISO(date),
+        district: r.district,
+        office: r.office,
+        ddo_code: codeMatch ? codeMatch[1] : null,
+        ddo_name: r.office.replace(/^[A-Z]{2,3}\d+\s/, ''),
+        total_employees: r.total,
+        checked_in: r.checkedIn || 0,
+        working_shifts: r.working,
+        leaves: r.leaves,
+        absent: r.absent,
+        holidays: r.holidays,
+        progress: r.pct,
+      };
+    })
   );
 
   const statusEl = document.getElementById('uploadStatusText');
@@ -385,7 +441,7 @@ async function syncToDatabase(){
       const chunk = allRows.slice(i, i + chunkSize);
       const { error } = await window.__supabase
         .from('attendance')
-        .upsert(chunk, { onConflict: 'date,office' });
+        .upsert(chunk, { onConflict: 'attendance_date,office' });
       if (error) throw error;
     }
     if (statusEl) statusEl.innerHTML = originalText + ' &nbsp;·&nbsp; <span style="color:var(--accent)">✅ Saved ' + allRows.length + ' records to database</span>';
@@ -1020,7 +1076,7 @@ function processFile(file){
             const pct=working>0?Math.min(1,Math.max(0,present/working)):Math.min(1,Math.max(0,progressRaw));
             return{office,dept:sv(r['Department']||'').trim(),district:getDistrict(office),
               category:classifyDDO(office),total,present,absent,leaves,holidays,working,
-              pct,absentPct:working>0?Math.min(1,Math.max(0,absent/working)):0,date:sn};
+              pct,absentPct:working>0?Math.min(1,Math.max(0,absent/working)):0,date:sn,checkedIn};
           }).filter(Boolean);
           // ── Phase 3: District Admins only ever see their own district's rows.
           // This is the single choke point all data flows through, so every
