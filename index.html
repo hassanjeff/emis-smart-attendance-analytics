@@ -312,6 +312,114 @@ tfoot td{padding:8px 13px;font-weight:700;font-size:12px;background:var(--surfac
 })();
 </script>
 <!-- ══════════ END ROLE BADGE ══════════ -->
+<!-- ══════════ PHASE 6: ATTENDANCE IMPORT MODULE ══════════ -->
+<script>
+// ── Load existing attendance data from Supabase into the dashboard ──
+// Runs automatically on startup for everyone (superadmins see all districts,
+// district admins automatically see only their own via RLS on the `attendance`
+// table), and can also be triggered manually via the Refresh button.
+async function loadFromDatabase(manual){
+  const btn = document.getElementById('refreshDbBtn');
+  if (manual && btn) { btn.disabled = true; btn.textContent = '🔄 Loading…'; }
+
+  try {
+    const { data, error } = await window.__supabase
+      .from('attendance')
+      .select('*')
+      .order('date', { ascending: true });
+
+    if (error) {
+      console.warn('Could not load attendance from database:', error);
+      if (manual) alert('Could not load data from database: ' + error.message);
+      return false;
+    }
+    if (!data || !data.length) {
+      if (manual) alert('No data found in the database yet.');
+      return false;
+    }
+
+    allSheetData = {}; filteredData = []; tableData = []; destroyAllCharts();
+    data.forEach(r => {
+      const row = {
+        office: r.office, dept: r.dept, district: r.district, category: r.category,
+        total: r.total, present: r.present, absent: r.absent, leaves: r.leaves,
+        holidays: r.holidays, working: r.working, pct: r.pct, absentPct: r.absent_pct,
+        date: r.date,
+      };
+      if (!allSheetData[r.date]) allSheetData[r.date] = [];
+      allSheetData[r.date].push(row);
+    });
+    initDashboard();
+    return true;
+  } catch (e) {
+    console.warn('loadFromDatabase failed:', e);
+    if (manual) alert('Could not load data from database: ' + e.message);
+    return false;
+  } finally {
+    if (manual && btn) { btn.disabled = false; btn.textContent = '🔄 Refresh from Database'; }
+  }
+}
+
+// ── Push a freshly uploaded workbook into Supabase (superadmin only) ──
+// Called automatically right after a successful Excel parse. District Admins
+// never call this — per the original access design, only superadmins import.
+async function syncToDatabase(){
+  if (window.__userRole !== 'superadmin') return;
+
+  const allRows = Object.entries(allSheetData).flatMap(([date, rows]) =>
+    rows.map(r => ({
+      date, office: r.office, dept: r.dept, district: r.district, category: r.category,
+      total: r.total, present: r.present, absent: r.absent, leaves: r.leaves,
+      holidays: r.holidays, working: r.working, pct: r.pct, absent_pct: r.absentPct,
+      uploaded_by: window.__currentUser.id,
+    }))
+  );
+
+  const statusEl = document.getElementById('uploadStatusText');
+  const originalText = statusEl ? statusEl.innerHTML : '';
+  if (statusEl) statusEl.innerHTML += ' &nbsp;·&nbsp; <span style="color:var(--primary)">💾 Saving to database…</span>';
+
+  try {
+    const chunkSize = 500; // Supabase recommends keeping individual requests reasonably sized
+    for (let i = 0; i < allRows.length; i += chunkSize) {
+      const chunk = allRows.slice(i, i + chunkSize);
+      const { error } = await window.__supabase
+        .from('attendance')
+        .upsert(chunk, { onConflict: 'date,office' });
+      if (error) throw error;
+    }
+    if (statusEl) statusEl.innerHTML = originalText + ' &nbsp;·&nbsp; <span style="color:var(--accent)">✅ Saved ' + allRows.length + ' records to database</span>';
+  } catch (e) {
+    console.error('syncToDatabase failed:', e);
+    if (statusEl) statusEl.innerHTML = originalText + ' &nbsp;·&nbsp; <span style="color:var(--danger)">⚠️ Database save failed: ' + e.message + '</span>';
+  }
+}
+
+// ── Startup wiring: hide/show the right upload UI per role, then auto-load ──
+(function(){
+  function initPhase6(){
+    if (typeof window.__userRole === 'undefined') { setTimeout(initPhase6, 100); return; }
+
+    if (window.__userRole === 'district_admin') {
+      // District Admins never upload — hide the upload panel and "Change File" control
+      const panel = document.getElementById('uploadPanel');
+      if (panel) panel.style.display = 'none';
+      const changeLabel = document.getElementById('changeFileLabel');
+      if (changeLabel) changeLabel.style.display = 'none';
+    }
+
+    loadFromDatabase(false).then(loaded => {
+      if (!loaded && window.__userRole === 'district_admin') {
+        // No data yet for this district — show the waiting notice instead of the upload panel
+        const notice = document.getElementById('districtAdminNotice');
+        if (notice) notice.style.display = 'flex';
+      }
+    });
+  }
+  initPhase6();
+})();
+</script>
+<!-- ══════════ END PHASE 6 ══════════ -->
 <div id="libErr" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#dc2626;color:#fff;padding:9px;text-align:center;font-size:12px;font-weight:600">⚠️ Excel library failed to load. Check your connection and press Ctrl+F5.</div>
 
 <!-- TOPBAR -->
@@ -360,11 +468,23 @@ tfoot td{padding:8px 13px;font-weight:700;font-size:12px;background:var(--surfac
     <div id="uploadSpinner"></div>
   </label>
 </div>
+<!-- Phase 6: shown instead of upload panel for District Admins — they don't upload, data syncs automatically -->
+<div class="upload-panel" id="districtAdminNotice" style="display:none">
+  <span class="upload-icon">🔄</span>
+  <h3>Waiting for data…</h3>
+  <p>Attendance data is uploaded centrally by the EMIS Section. It will appear here automatically once available for your district.</p>
+  <button class="file-btn" type="button" onclick="loadFromDatabase(true)" style="border:none">
+    <span>🔄</span><span>Check for Data</span>
+  </button>
+</div>
 <input type="file" id="excelUpload" accept=".xlsx,.xls" style="display:none">
 <!-- Status row lives outside upload panel so panel never needs innerHTML rebuild -->
 <div id="uploadStatusRow">
   <div id="uploadStatusText"></div>
-  <label class="file-btn compact" for="excelUpload">📎 Change File</label>
+  <div style="display:flex;gap:8px">
+    <button class="file-btn compact" type="button" onclick="loadFromDatabase(true)" style="border:none" id="refreshDbBtn">🔄 Refresh from Database</button>
+    <label class="file-btn compact" for="excelUpload" id="changeFileLabel">📎 Change File</label>
+  </div>
 </div>
 
 <!-- FILTER BAR -->
@@ -921,6 +1041,7 @@ function processFile(file){
         setUploading(false);return;
       }
       initDashboard();
+      syncToDatabase();
     }catch(err){alert('Error reading file: '+err.message);}
     finally{setUploading(false);}
   };
