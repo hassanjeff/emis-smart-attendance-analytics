@@ -228,8 +228,26 @@ tfoot td{padding:8px 13px;font-weight:700;font-size:12px;background:var(--surfac
 .empty-state p{font-size:12px}
 @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .fade-in{animation:fadeUp .28s ease both}
-@media(max-width:768px){.chart-grid{grid-template-columns:1fr}.kpi-grid{grid-template-columns:repeat(2,1fr)}.main{padding:11px}.topbar-sub,#dataStatus{display:none}}
-@media(max-width:480px){.kpi-grid{grid-template-columns:1fr}}
+@media(max-width:768px){
+  .chart-grid{grid-template-columns:1fr}.kpi-grid{grid-template-columns:repeat(2,1fr)}.main{padding:11px}.topbar-sub,#dataStatus{display:none}
+  /* Topbar: allow it to wrap onto a second line instead of clipping/overflowing */
+  .topbar{height:auto;flex-wrap:wrap;row-gap:8px;padding:10px 14px}
+  .topbar-brand{flex:1 1 auto}
+  .topbar-right{flex:1 1 100%;flex-wrap:wrap;justify-content:flex-start}
+  #userEmailDisplay{display:none} /* full email too long for small screens; role badge + logout are enough */
+  .dm-label{display:none}
+  /* Navtabs assumed a fixed 60px topbar to stick under — since the topbar can
+     now be taller (wrapped), let navtabs scroll normally on mobile instead */
+  .navtabs{position:static;top:auto}
+  .chart-header{flex-wrap:wrap}
+}
+@media(max-width:480px){
+  .kpi-grid{grid-template-columns:1fr}
+  .topbar-logo{width:30px;height:30px;font-size:9px}
+  .topbar-title{font-size:15px}
+  .live-clock{display:none}
+  #roleBadge{display:none} /* very tight screens: Manage Users + Logout are the essentials */
+}
 </style>
 </head>
 <body>
