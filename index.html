@@ -243,6 +243,21 @@ tfoot td{padding:8px 13px;font-weight:700;font-size:12px;background:var(--surfac
 
   document.documentElement.style.visibility = 'hidden';
 
+  // If this page load is carrying a password-recovery token in the URL
+  // (i.e. someone clicked a "reset password" email link but landed here
+  // instead of reset-password.html — e.g. a Supabase redirect URL
+  // misconfiguration) — send them to the proper reset page immediately
+  // rather than silently granting a full dashboard session.
+  window.__supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'PASSWORD_RECOVERY') {
+      window.location.href = 'reset-password.html';
+      return;
+    }
+    if (event === 'SIGNED_OUT' || !session) {
+      window.location.href = 'login.html';
+    }
+  });
+
   window.__supabase.auth.getSession().then(async ({ data: { session } }) => {
     if (!session) {
       window.location.href = 'login.html';
@@ -278,12 +293,6 @@ tfoot td{padding:8px 13px;font-weight:700;font-size:12px;background:var(--surfac
     }
 
     document.documentElement.style.visibility = 'visible';
-  });
-
-  window.__supabase.auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_OUT' || !session) {
-      window.location.href = 'login.html';
-    }
   });
 })();
 </script>
@@ -1116,7 +1125,7 @@ function initDashboard(){
   // ★ Never rebuild upload panel innerHTML
   document.getElementById('uploadPanel').style.display='none';
   const sr=document.getElementById('uploadStatusRow');sr.style.display='flex';
-  document.getElementById('uploadStatusText').innerHTML='✅ Loaded: <strong>'+dates.length+' date(s)</strong> — '+dates.join(', ')+' · '+allRows.length+' records';
+  document.getElementById('uploadStatusText').innerHTML='✅ Loaded: <strong>'+dates.length+' date(s)</strong> — '+dates.map(esc).join(', ')+' · '+allRows.length+' records';
   ['dateSelect','dateFrom','dateTo','rptAttDate','rptDistrictDate','mapDate'].forEach(id=>{
     const el=document.getElementById(id);if(!el)return;
     while(el.options.length>1)el.remove(1);
@@ -1190,6 +1199,19 @@ function resetFilters(){
 // HELPERS
 // ═══════════════════════════════════════════
 function fmt(v){return(v||0).toLocaleString();}
+// Escapes any user-supplied text (uploaded Excel values — office/district
+// names, etc.) before it is inserted into innerHTML, preventing stored XSS
+// if a workbook cell ever contains HTML/script-like content. Always use
+// esc() when concatenating raw data fields into HTML strings; never needed
+// for numbers or values already passed through a whitelisted formatter
+// (fmt, pctStr, pctBadge, catBadge, trafficLight, DISTRICT_COLORS lookups).
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+// Sanitizes a raw (uploaded-data-derived) value for safe use as an export
+// filename / anywhere it gets embedded in an inline onclick string —
+// strips everything except letters, numbers, underscore and hyphen, so a
+// stray quote character in an office/district name can never break out of
+// a JS string literal inside an onclick="..." attribute.
+function safeFileName(s){return String(s||'').trim().replace(/\s+/g,'_').replace(/[^A-Za-z0-9_\-]/g,'').substring(0,40);}
 function pctStr(p){return(p*100).toFixed(1)+'%';}
 function nowStr(){return new Date().toLocaleString('en-PK',{dateStyle:'long',timeStyle:'medium'});}
 function nowFile(){const d=new Date();return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate())+'_'+p2(d.getHours())+'h'+p2(d.getMinutes())+'m';}
@@ -1370,8 +1392,8 @@ function renderMainTable(){
   tbody.innerHTML=page.map((r,i)=>{
     const ri=filteredData.indexOf(r);
     return'<tr><td>'+(start+i+1)+'</td>'
-    +'<td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+(DISTRICT_COLORS[r.district]||'#888')+';margin-right:5px;vertical-align:middle"></span>'+r.district+'</td>'
-    +'<td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+r.office+'">'+r.office+'</td>'
+    +'<td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+(DISTRICT_COLORS[r.district]||'#888')+';margin-right:5px;vertical-align:middle"></span>'+esc(r.district)+'</td>'
+    +'<td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(r.office)+'">'+esc(r.office)+'</td>'
     +'<td>'+catBadge(r.category)+'</td><td>'+fmt(r.total)+'</td><td>'+fmt(r.present)+'</td>'
     +'<td style="color:'+(r.absent>0?'#dc2626':'inherit')+';font-weight:'+(r.absent>0?700:400)+'">'+fmt(r.absent)+'</td>'
     +'<td>'+fmt(r.leaves)+'</td><td>'+pctBar(r.pct)+'</td><td>'+pctBadge(r.absentPct)+'</td>'
@@ -1447,13 +1469,17 @@ function renderDistrictCharts(){
   const _distSortKeys=[null,'district','count','total','present','absent','pct','absentPct',null];
   dt.querySelector('thead').innerHTML='<tr>'+_distSortCols.map(function(c,i){var k=_distSortKeys[i];var cls=k&&distSort.col===k?(distSort.dir>0?'sort-asc':'sort-desc'):'';var da=k?' data-sk="'+k+'"':'';return'<th'+da+' class="'+cls+'">'+c+'</th>';}).join('')+'</tr>';
   dt.querySelector('thead').querySelectorAll('th[data-sk]').forEach(function(t){t.onclick=function(){distSortBy(this.dataset.sk);};});
-  dt.querySelector('tbody').innerHTML=agg2.map((d,i)=>'<tr class="dist-row" style="cursor:pointer;'+(i%2!==0?'background:var(--surface-2)':'')+'" onclick="showDistrictDrill(\''+d.district+'\')" title="Click to drill into '+d.district+'">'
+  dt.querySelector('tbody').innerHTML=agg2.map((d,i)=>'<tr class="dist-row" style="cursor:pointer;'+(i%2!==0?'background:var(--surface-2)':'')+'" data-district-idx="'+i+'" title="Click to drill into '+esc(d.district)+'">'
     +'<td>'+(i+1)+'</td>'
-    +'<td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+(DISTRICT_COLORS[d.district]||'#888')+';margin-right:6px;vertical-align:middle"></span><strong>'+d.district+'</strong></td>'
+    +'<td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+(DISTRICT_COLORS[d.district]||'#888')+';margin-right:6px;vertical-align:middle"></span><strong>'+esc(d.district)+'</strong></td>'
     +'<td>'+d.count+'</td><td>'+fmt(d.total)+'</td><td>'+fmt(d.present)+'</td>'
     +'<td style="color:#dc2626;font-weight:700">'+fmt(d.absent)+'</td>'
     +'<td>'+pctBar(d.pct)+'</td><td>'+pctBadge(d.absentPct)+'</td><td>'+trafficLight(d.pct)+'</td>'
     +'</tr>').join('');
+  dt.querySelector('tbody').querySelectorAll('tr[data-district-idx]').forEach(function(tr){
+    const d=agg2[parseInt(tr.getAttribute('data-district-idx'))];
+    tr.onclick=function(){showDistrictDrill(d.district);};
+  });
   const tA={total:agg2.reduce((s,d)=>s+d.total,0),present:agg2.reduce((s,d)=>s+d.present,0),absent:agg2.reduce((s,d)=>s+d.absent,0),working:agg2.reduce((s,d)=>s+d.working,0)};
   dt.querySelector('tfoot').innerHTML='<td colspan="2"><strong>Grand Total (GB)</strong></td><td>'+agg2.length+' districts</td><td><strong>'+fmt(tA.total)+'</strong></td><td><strong>'+fmt(tA.present)+'</strong></td><td style="color:#dc2626"><strong>'+fmt(tA.absent)+'</strong></td><td><strong>'+pctBar(tA.working>0?tA.present/tA.working:0)+'</strong></td><td><strong>'+pctBadge(tA.working>0?tA.absent/tA.working:0)+'</strong></td><td><strong>'+trafficLight(tA.working>0?tA.present/tA.working:0)+'</strong></td>';
 }
@@ -1619,9 +1645,9 @@ function renderHeatmapGrid(){
   const legend=document.getElementById('hmLegend');
   if(metric==='absent')legend.innerHTML='<div style="width:100px;height:6px;background:linear-gradient(90deg,#d1fae5,#fef3c7,#fee2e2,#7f1d1d);border-radius:3px"></div><span>0 absent ✅ → High absent 🔴</span>';
   else legend.innerHTML='<div style="width:100px;height:6px;background:linear-gradient(90deg,#7f1d1d,#fee2e2,#fef3c7,#d1fae5,#1a56db);border-radius:3px"></div><span>Low → High attendance</span>';
-  let html='<tr><th>District</th>'+dates.map(d=>'<th>'+d+'</th>').join('')+'</tr>';
+  let html='<tr><th>District</th>'+dates.map(d=>'<th>'+esc(d)+'</th>').join('')+'</tr>';
   districts.forEach(dist=>{
-    html+='<tr><td style="text-align:left;background:#1e3a5f;color:#fff;font-weight:700;padding:7px 11px">'+dist+'</td>';
+    html+='<tr><td style="text-align:left;background:#1e3a5f;color:#fff;font-weight:700;padding:7px 11px">'+esc(dist)+'</td>';
     dates.forEach(date=>{
       let rows=(allSheetData[date]||[]).filter(r=>r.district===dist);
       if(currentCategory!=='all')rows=rows.filter(r=>r.category===currentCategory);
@@ -1630,16 +1656,20 @@ function renderHeatmapGrid(){
       if(metric==='pct'){const v=w>0?p/w:null;disp=v!==null?pctStr(v):'—';bg=v!==null?hmPct(v):'#e2e8f0';tc=v!==null&&v>0.5?'#fff':'#0f172a';}
       else if(metric==='absent'){disp=fmt(a);bg=hmAbsent(a,rows.length);}
       else{disp=fmt(p);bg=rows.length?hmPct(w>0?p/w:0):'#e2e8f0';}
-      html+='<td style="background:'+bg+';color:'+tc+'" onclick="showHeatDrill(\''+dist+'\',\''+date+'\')">'+disp+'</td>';
+      html+='<td style="background:'+bg+';color:'+tc+'" data-district="'+esc(dist)+'" data-date="'+esc(date)+'">'+disp+'</td>';
     });
     html+='</tr>';
   });
   document.getElementById('heatmapTable').innerHTML=html;
+  document.getElementById('heatmapTable').querySelectorAll('td[data-date]').forEach(function(td){
+    td.style.cursor='pointer';
+    td.onclick=function(){showHeatDrill(this.getAttribute('data-district'),this.getAttribute('data-date'));};
+  });
   const allRows=Object.values(allSheetData).flat();
   const top=[...new Set(allRows.map(r=>r.office))].map(o=>{const rs=allRows.filter(r=>r.office===o);return{office:o,total:rs.reduce((s,r)=>s+r.total,0)};}).sort((a,b)=>b.total-a.total).slice(0,40).map(r=>r.office);
-  let h2='<tr><th style="min-width:160px">DDO</th>'+dates.map(d=>'<th>'+d+'</th>').join('')+'</tr>';
+  let h2='<tr><th style="min-width:160px">DDO</th>'+dates.map(d=>'<th>'+esc(d)+'</th>').join('')+'</tr>';
   top.forEach(inst=>{
-    h2+='<tr><td style="text-align:left;background:#1e3a5f;color:#fff;font-size:10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 9px" title="'+inst+'">'+inst.replace(/^[A-Z]{2}\d+\s/,'')+'</td>';
+    h2+='<tr><td style="text-align:left;background:#1e3a5f;color:#fff;font-size:10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 9px" title="'+esc(inst)+'">'+esc(inst.replace(/^[A-Z]{2}\d+\s/,''))+'</td>';
     dates.forEach(date=>{const row=(allSheetData[date]||[]).find(r=>r.office===inst);const v=row?row.pct:null;const bg=v===null?'#e2e8f0':hmPct(v);const tc=v!==null&&v>0.5?'#fff':'#0f172a';h2+='<td style="background:'+bg+';color:'+tc+';font-size:10px">'+(v===null?'—':pctStr(v))+'</td>';});
     h2+='</tr>';
   });
@@ -1665,16 +1695,19 @@ function renderExplorer(){
   if(se)data=data.filter(r=>r.office.toLowerCase().includes(se)||r.district.toLowerCase().includes(se));
   if(sv2==='pct_desc')data.sort((a,b)=>b.pct-a.pct);else if(sv2==='pct_asc')data.sort((a,b)=>a.pct-b.pct);else if(sv2==='absent_desc')data.sort((a,b)=>b.absent-a.absent);else data.sort((a,b)=>a.office.localeCompare(b.office));
   document.getElementById('explorerCount').textContent='Showing '+data.length+' DDO'+(data.length!==1?'s':'');
-  document.getElementById('explorerGrid').innerHTML=data.map(r=>{
-    const rj=JSON.stringify({office:r.office,district:r.district,category:r.category,total:r.total,present:r.present,absent:r.absent,leaves:r.leaves,holidays:r.holidays,working:r.working,pct:r.pct,absentPct:r.absentPct}).replace(/'/g,"&#39;");
-    return'<div class="explorer-card" onclick=\'showInstDrill('+rj+')\'>'+
+  document.getElementById('explorerGrid').innerHTML=data.map((r,i)=>{
+    return'<div class="explorer-card" data-exp-idx="'+i+'">'+
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px">'+
-    '<span style="font-size:9px;background:'+(DISTRICT_COLORS[r.district]||'#888')+'22;color:'+(DISTRICT_COLORS[r.district]||'#888')+';padding:2px 7px;border-radius:20px;font-weight:700">'+r.district+'</span>'+pctBadge(r.pct)+'</div>'+
-    '<div class="explorer-name">'+r.office.replace(/^[A-Z]{2,3}\d+\s/,'')+'</div>'+
+    '<span style="font-size:9px;background:'+(DISTRICT_COLORS[r.district]||'#888')+'22;color:'+(DISTRICT_COLORS[r.district]||'#888')+';padding:2px 7px;border-radius:20px;font-weight:700">'+esc(r.district)+'</span>'+pctBadge(r.pct)+'</div>'+
+    '<div class="explorer-name">'+esc(r.office.replace(/^[A-Z]{2,3}\d+\s/,''))+'</div>'+
     '<div class="explorer-meta"><span>👥 '+fmt(r.total)+'</span><span>✅ '+fmt(r.present)+'</span><span>❌ '+fmt(r.absent)+'</span>'+catBadge(r.category)+'</div>'+
     '<div class="explorer-bar"><div style="height:100%;border-radius:2px;width:'+(r.pct*100).toFixed(1)+'%;background:'+pctColor(r.pct)+'"></div></div>'+
     '</div>';
   }).join('')||'<div class="empty-state" style="padding:28px;grid-column:1/-1"><span class="eicon">🔍</span><h3>No matches</h3><p>Adjust filters</p></div>';
+  document.getElementById('explorerGrid').querySelectorAll('[data-exp-idx]').forEach(function(card){
+    const r=data[parseInt(card.getAttribute('data-exp-idx'))];
+    card.onclick=function(){showInstDrill(r);};
+  });
 }
 
 // ═══════════════════════════════════════════
@@ -1917,10 +1950,10 @@ function renderDistrictReport(){
   const meta=document.getElementById('districtReportMeta');
   if(meta)meta.innerHTML=
     '<div><span class="lh-meta-key">Report Title:</span><span class="lh-meta-val">District-wise Attendance Summary Report</span></div>'+
-    '<div><span class="lh-meta-key">Period:</span><span class="lh-meta-val">'+period+'</span></div>'+
+    '<div><span class="lh-meta-key">Period:</span><span class="lh-meta-val">'+esc(period)+'</span></div>'+
     '<div><span class="lh-meta-key">Generated On:</span><span class="lh-meta-val">'+nowStr()+'</span></div>'+
     '<div><span class="lh-meta-key">Prepared By:</span><span class="lh-meta-val">EMIS SEDGB</span></div>'+
-    '<div><span class="lh-meta-key">Filters:</span><span class="lh-meta-val">'+getActiveFiltersLabel()+'</span></div>'+
+    '<div><span class="lh-meta-key">Filters:</span><span class="lh-meta-val">'+esc(getActiveFiltersLabel())+'</span></div>'+
     '<div><span class="lh-meta-key">Districts:</span><span class="lh-meta-val">'+agg.length+' districts | '+filteredData.length+' DDOs</span></div>';
   const fd=document.getElementById('districtReportFooterDate');
   if(fd)fd.textContent='Generated: '+nowStr();
@@ -1956,9 +1989,9 @@ function renderDistrictReport(){
   if(!tbl)return;
   tbl.querySelector('thead').innerHTML='<tr><th>#</th><th>District</th><th>DDOs</th><th>Total Employees</th><th>Present</th><th>Absent</th><th>Attendance %</th><th>Absent %</th><th>Status</th></tr>';
   tbl.querySelector('tbody').innerHTML=agg.map(function(d,i){
-    return'<tr class="dist-row" data-dist="'+d.district+'" style="'+(i%2!==0?'background:var(--surface-2)':'')+';cursor:pointer">'+
+    return'<tr class="dist-row" data-dist="'+esc(d.district)+'" style="'+(i%2!==0?'background:var(--surface-2)':'')+';cursor:pointer">'+
     '<td>'+(i+1)+'</td>'+
-    '<td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+(DISTRICT_COLORS[d.district]||'#888')+';margin-right:6px;vertical-align:middle"></span><strong>'+d.district+'</strong></td>'+
+    '<td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+(DISTRICT_COLORS[d.district]||'#888')+';margin-right:6px;vertical-align:middle"></span><strong>'+esc(d.district)+'</strong></td>'+
     '<td>'+d.count+'</td><td>'+fmt(d.total)+'</td><td>'+fmt(d.present)+'</td>'+
     '<td style="color:#991b1b;font-weight:700">'+fmt(d.absent)+'</td>'+
     '<td>'+pctBar(d.pct)+'</td><td>'+pctBadge(d.absentPct)+'</td><td>'+trafficLight(d.pct)+'</td>'+
@@ -2065,7 +2098,7 @@ function renderAttReport(){
   const dv=document.getElementById('rptAttDate').value;const period=dv==='all'?getPeriod():dv;
   document.getElementById('attReportMeta').innerHTML=
     '<div><span class="lh-meta-key">Report Title:</span><span class="lh-meta-val">DDO Attendance Summary Report</span></div>'+
-    '<div><span class="lh-meta-key">Period:</span><span class="lh-meta-val">'+period+'</span></div>'+
+    '<div><span class="lh-meta-key">Period:</span><span class="lh-meta-val">'+esc(period)+'</span></div>'+
     '<div><span class="lh-meta-key">Generated On:</span><span class="lh-meta-val">'+nowStr()+'</span></div>'+
     '<div><span class="lh-meta-key">Prepared By:</span><span class="lh-meta-val">EMIS SEDGB</span></div>'+
     '<div><span class="lh-meta-key">Data Source:</span><span class="lh-meta-val">EMIS Biometric Attendance System</span></div>'+
@@ -2073,7 +2106,7 @@ function renderAttReport(){
   document.getElementById('attReportFooterDate').textContent='Generated: '+nowStr();
   const tbl=document.getElementById('attReportTable');
   tbl.querySelector('thead').innerHTML='<tr><th>#</th><th>DDO Code</th><th>DDO Name</th><th>District</th><th>Category</th><th>Total</th><th>Present</th><th>Absent</th><th>Att %</th><th>Status</th></tr>';
-  tbl.querySelector('tbody').innerHTML=data.map((r,i)=>'<tr style="'+(i%2!==0?'background:#f8fafc':'')+'"><td>'+(i+1)+'</td><td style="font-family:IBM Plex Mono,monospace;font-size:10px">'+(r.office.match(/^[A-Z]+\d+/)||['—'])[0]+'</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+r.office+'">'+r.office+'</td><td>'+r.district+'</td><td>'+catBadge(r.category)+'</td><td>'+fmt(r.total)+'</td><td>'+fmt(r.present)+'</td><td style="color:#dc2626;font-weight:700">'+fmt(r.absent)+'</td><td>'+pctBar(r.pct)+'</td><td>'+trafficLight(r.pct)+'</td></tr>').join('');
+  tbl.querySelector('tbody').innerHTML=data.map((r,i)=>'<tr style="'+(i%2!==0?'background:#f8fafc':'')+'"><td>'+(i+1)+'</td><td style="font-family:IBM Plex Mono,monospace;font-size:10px">'+(r.office.match(/^[A-Z]+\d+/)||['—'])[0]+'</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(r.office)+'">'+esc(r.office)+'</td><td>'+esc(r.district)+'</td><td>'+catBadge(r.category)+'</td><td>'+fmt(r.total)+'</td><td>'+fmt(r.present)+'</td><td style="color:#dc2626;font-weight:700">'+fmt(r.absent)+'</td><td>'+pctBar(r.pct)+'</td><td>'+trafficLight(r.pct)+'</td></tr>').join('');
   const totW=data.reduce((s,r)=>s+r.working,0),totP=data.reduce((s,r)=>s+r.present,0);
   tbl.querySelector('tfoot').innerHTML='<td colspan="5"><strong>TOTAL — '+data.length+' DDOs</strong></td><td><strong>'+fmt(data.reduce((s,r)=>s+r.total,0))+'</strong></td><td><strong>'+fmt(totP)+'</strong></td><td style="color:#dc2626"><strong>'+fmt(data.reduce((s,r)=>s+r.absent,0))+'</strong></td><td><strong>'+pctBar(totW>0?totP/totW:0)+'</strong></td><td><strong>'+trafficLight(totW>0?totP/totW:0)+'</strong></td>';
 }
@@ -2168,7 +2201,7 @@ function drillTableHTML(rows){
   return'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#1e3a5f;color:#fff">'+['#','DDO Name','Category','Total','Present','Absent','Leaves','Att %','Status'].map(h=>'<th style="padding:6px 10px;text-align:left;font-size:9px;white-space:nowrap">'+h+'</th>').join('')+'</tr></thead>'
   +'<tbody>'+rows.map((r,i)=>'<tr style="background:'+(i%2===0?'var(--surface)':'var(--surface-2)')+';border-bottom:1px solid var(--border)">'
   +'<td style="padding:5px 10px">'+(i+1)+'</td>'
-  +'<td style="padding:5px 10px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+r.office+'">'+r.office+'</td>'
+  +'<td style="padding:5px 10px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(r.office)+'">'+esc(r.office)+'</td>'
   +'<td style="padding:5px 10px">'+catBadge(r.category)+'</td>'
   +'<td style="padding:5px 10px">'+fmt(r.total)+'</td><td style="padding:5px 10px">'+fmt(r.present)+'</td>'
   +'<td style="padding:5px 10px;color:#dc2626;font-weight:700">'+fmt(r.absent)+'</td>'
@@ -2208,27 +2241,27 @@ function showKpiDrill(label){
   else if(label.includes('87%')||label.includes('Target'))rows=filteredData.filter(r=>r.pct>=0.87);
   else rows=filteredData.slice(0,50);
   rows=[...rows].sort((a,b)=>b.pct-a.pct);
-  showModal(label,drillTableHTML(rows),rows,label.replace(/[\s/]+/g,'_').substring(0,40)+'_'+nowFile());
+  showModal(label,drillTableHTML(rows),rows,safeFileName(label)+'_'+nowFile());
 }
 function showDistrictDrill(district){
   const rows=[...filteredData.filter(r=>r.district===district)].sort((a,b)=>b.pct-a.pct);
-  showModal(district+' — '+rows.length+' DDOs',drillTableHTML(rows),rows,district+'_DrillDown_'+nowFile());
+  showModal(district+' — '+rows.length+' DDOs',drillTableHTML(rows),rows,safeFileName(district)+'_DrillDown_'+nowFile());
 }
 function showInstDrill(r){
   if(!r||!r.office)return;
   showModal(r.office,
     '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:9px;margin-bottom:14px">'+
-    [['District',r.district],['Category',r.category||'—'],['Total Emp',fmt(r.total)],['Present',fmt(r.present)],['Absent',fmt(r.absent)],['Leaves',fmt(r.leaves)],['Holidays',fmt(r.holidays)],['Working',fmt(r.working)],['Attendance',pctStr(r.pct)],['Absence',pctStr(r.absentPct)]].map(([k,v])=>'<div style="background:var(--surface-2);border-radius:7px;padding:10px;border:1.5px solid var(--border)"><div style="font-size:9px;font-weight:700;color:var(--text-2);text-transform:uppercase;margin-bottom:3px">'+k+'</div><div style="font-size:16px;font-weight:700;color:var(--text-1)">'+v+'</div></div>').join('')+'</div>'+
-    '<p style="font-size:11px;margin-bottom:5px"><strong>DDO Code:</strong> <code style="background:var(--surface-2);padding:2px 5px;border-radius:3px">'+(r.office.match(/^[A-Z]+\d+/)||['—'])[0]+'</code></p>'+
-    '<p style="font-size:11px;margin-bottom:11px;word-break:break-word"><strong>Full Name:</strong> '+r.office+'</p>'+
+    [['District',r.district],['Category',r.category||'—'],['Total Emp',fmt(r.total)],['Present',fmt(r.present)],['Absent',fmt(r.absent)],['Leaves',fmt(r.leaves)],['Holidays',fmt(r.holidays)],['Working',fmt(r.working)],['Attendance',pctStr(r.pct)],['Absence',pctStr(r.absentPct)]].map(([k,v])=>'<div style="background:var(--surface-2);border-radius:7px;padding:10px;border:1.5px solid var(--border)"><div style="font-size:9px;font-weight:700;color:var(--text-2);text-transform:uppercase;margin-bottom:3px">'+esc(k)+'</div><div style="font-size:16px;font-weight:700;color:var(--text-1)">'+esc(v)+'</div></div>').join('')+'</div>'+
+    '<p style="font-size:11px;margin-bottom:5px"><strong>DDO Code:</strong> <code style="background:var(--surface-2);padding:2px 5px;border-radius:3px">'+esc((r.office.match(/^[A-Z]+\d+/)||['—'])[0])+'</code></p>'+
+    '<p style="font-size:11px;margin-bottom:11px;word-break:break-word"><strong>Full Name:</strong> '+esc(r.office)+'</p>'+
     pctBar(r.pct)+'<div style="margin-top:8px">'+trafficLight(r.pct)+'</div>',
-  [r],r.office.replace(/\s+/g,'_').substring(0,30)+'_'+nowFile());
+  [r],safeFileName(r.office)+'_'+nowFile());
 }
 function showHeatDrill(district,date){
   let rows=[...(allSheetData[date]||[]).filter(r=>r.district===district)];
   if(currentCategory!=='all')rows=rows.filter(r=>r.category===currentCategory);
   rows.sort((a,b)=>b.pct-a.pct);
-  showModal(district+' — '+date,drillTableHTML(rows),rows,district+'_'+date);
+  showModal(district+' — '+date,drillTableHTML(rows),rows,safeFileName(district)+'_'+safeFileName(date));
 }
 
 // ═══════════════════════════════════════════
