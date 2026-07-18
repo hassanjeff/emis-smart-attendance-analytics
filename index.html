@@ -524,6 +524,9 @@ async function syncToDatabase(){
       if (panel) panel.style.display = 'none';
       const changeLabel = document.getElementById('changeFileLabel');
       if (changeLabel) changeLabel.style.display = 'none';
+    } else if (window.__userRole === 'superadmin') {
+      const empRow = document.getElementById('employeeUploadRow');
+      if (empRow) empRow.style.display = 'flex';
     }
 
     loadFromDatabase(false).then(loaded => {
@@ -538,6 +541,125 @@ async function syncToDatabase(){
 })();
 </script>
 <!-- ══════════ END PHASE 6 ══════════ -->
+<!-- ══════════ EMPLOYEE DRILL-DOWN MODULE (optional, superadmin-only upload) ══════════ -->
+<script>
+// Strips "17th"/"1st"/"2nd"/"3rd" style ordinal suffixes so JS Date can
+// parse strings like "July 17th, 2026" — native Date.parse chokes on the
+// ordinal suffix otherwise.
+function stripOrdinal(s){ return String(s).replace(/(\d+)(st|nd|rd|th)/i, '$1'); }
+function parseEmployeeDateToISO(s){
+  const d = new Date(stripOrdinal(s));
+  if (isNaN(d)) return null;
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+(function attachEmployeeUploadListener(){
+  const el = document.getElementById('employeeUpload');
+  if (!el) { setTimeout(attachEmployeeUploadListener, 100); return; }
+  el.addEventListener('change', function(e){
+    const file = e.target.files[0];
+    if (file) processEmployeeFile(file);
+    e.target.value = '';
+  });
+})();
+
+function processEmployeeFile(file){
+  const statusEl = document.getElementById('employeeUploadStatus');
+  statusEl.textContent = '⏳ Reading file…';
+  statusEl.style.color = 'var(--primary)';
+
+  const reader = new FileReader();
+  reader.onload = async function(evt){
+    try {
+      const wb = XLSX.read(evt.target.result, { type: 'binary', cellDates: false });
+      // Status priority when the same employee has multiple rows for the
+      // same day (e.g. a separate "Checked In" event and a separate
+      // "Checked Out" event) — pick the most complete/authoritative one
+      // as the merged row's status, while keeping BOTH times captured.
+      const STATUS_PRIORITY = ['Checked Out','Checked In','Casual Leave','Sick Leave','Earned Leave',
+        'Study Leave','Maternity Leave','Extra Ordinary Leave','Ex-Pakistan Leave','Bereavement leave',
+        'Winter Vocations LG','Holiday','Not Checked In'];
+
+      const merged = new Map(); // key -> consolidated row
+      wb.SheetNames.forEach(sn => {
+        const raw = XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: '' });
+        raw.forEach(row => {
+          const office = String(row['Office'] || '').trim();
+          const employeeName = String(row['Employee'] || '').trim();
+          const dateRaw = row['Date'];
+          if (!office || !employeeName || !dateRaw) return; // skip incomplete rows
+          const iso = parseEmployeeDateToISO(dateRaw);
+          if (!iso) return; // unparseable date — skip rather than guess
+
+          const designation = String(row['Job Title'] || '').trim() || null;
+          const status = String(row['Status'] || '').trim() || null;
+          const checkIn = String(row['Check In'] || '').trim();
+          const checkOut = String(row['Check Out'] || '').trim();
+          const key = iso+'|'+office+'|'+employeeName+'|'+designation;
+
+          const existing = merged.get(key);
+          if (!existing) {
+            merged.set(key, {
+              attendance_date: iso, district: getDistrict(office), office,
+              department: String(row['Department'] || '').trim() || null,
+              employee_name: employeeName, designation, status,
+              check_in_time: checkIn && checkIn !== '-' ? checkIn : null,
+              check_out_time: checkOut && checkOut !== '-' ? checkOut : null,
+              uploaded_by: window.__currentUser.id,
+            });
+          } else {
+            // Merge: keep the higher-priority status, and fill in
+            // whichever check-in/check-out time isn't already captured
+            const curRank = STATUS_PRIORITY.indexOf(existing.status);
+            const newRank = STATUS_PRIORITY.indexOf(status);
+            if (newRank !== -1 && (curRank === -1 || newRank < curRank)) existing.status = status;
+            if (!existing.check_in_time && checkIn && checkIn !== '-') existing.check_in_time = checkIn;
+            if (!existing.check_out_time && checkOut && checkOut !== '-') existing.check_out_time = checkOut;
+          }
+        });
+      });
+      const allRows = Array.from(merged.values());
+
+      if (!allRows.length){
+        statusEl.textContent = '⚠️ No valid rows found. Check the file has Employee, Office, and Date columns.';
+        statusEl.style.color = 'var(--danger)';
+        return;
+      }
+
+      statusEl.textContent = '💾 Saving ' + allRows.length + ' employee records…';
+      const chunkSize = 500;
+      for (let i = 0; i < allRows.length; i += chunkSize){
+        const chunk = allRows.slice(i, i + chunkSize);
+        const { error } = await window.__supabase
+          .from('employee_attendance')
+          .upsert(chunk, { onConflict: 'attendance_date,office,employee_name,designation' });
+        if (error) throw error;
+        statusEl.textContent = '💾 Saving… ' + Math.min(i + chunkSize, allRows.length) + ' / ' + allRows.length;
+      }
+
+      statusEl.textContent = '✅ Saved ' + allRows.length + ' employee records';
+      statusEl.style.color = 'var(--accent)';
+    } catch (err){
+      statusEl.textContent = '⚠️ Failed: ' + err.message;
+      statusEl.style.color = 'var(--danger)';
+    }
+  };
+  reader.readAsBinaryString(file);
+}
+
+// ── Fetch employee list for a specific office + date (used by showInstDrill) ──
+async function fetchEmployeesForOffice(office, isoDate){
+  const { data, error } = await window.__supabase
+    .from('employee_attendance')
+    .select('employee_name,designation,status,check_in_time,check_out_time')
+    .eq('office', office)
+    .eq('attendance_date', isoDate)
+    .order('employee_name', { ascending: true });
+  if (error) { console.warn('fetchEmployeesForOffice failed:', error); return null; }
+  return data;
+}
+</script>
+<!-- ══════════ END EMPLOYEE DRILL-DOWN MODULE ══════════ -->
 <div id="libErr" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#dc2626;color:#fff;padding:9px;text-align:center;font-size:12px;font-weight:600">⚠️ Excel library failed to load. Check your connection and press Ctrl+F5.</div>
 
 <!-- TOPBAR -->
@@ -608,6 +730,17 @@ async function syncToDatabase(){
 <!-- Data quality warning — only appears if impossible values are found.
      Never alters the official numbers; purely a visible flag for review. -->
 <div id="dataQualityBanner" style="display:none;background:var(--warning-light);border:1.5px solid #f59e0b;border-radius:10px;padding:11px 16px;margin-bottom:18px;font-size:12px;color:#92400e"></div>
+
+<!-- Employee-level upload — OPTIONAL, superadmin only. Powers the employee
+     drill-down inside DDO cards only; never affects official DDO KPIs. -->
+<div id="employeeUploadRow" style="display:none;background:var(--surface);border:1.5px dashed var(--border);border-radius:10px;padding:10px 16px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:9px">
+  <div style="font-size:11px;color:var(--text-2)">
+    <strong style="color:var(--text-1)">👤 Employee Attendance (optional)</strong> — adds name-level detail to DDO drill-downs. Doesn't affect official KPIs above.
+    <span id="employeeUploadStatus" style="display:block;margin-top:2px;font-weight:600"></span>
+  </div>
+  <label class="file-btn compact" for="employeeUpload" style="border:none">📎 Upload Employee File</label>
+  <input type="file" id="employeeUpload" accept=".xlsx,.xls,.csv" style="display:none">
+</div>
 
 <!-- FILTER BAR -->
 <div class="filter-bar" id="filterBar" style="display:none">
@@ -2367,8 +2500,57 @@ function showInstDrill(r){
     [['District',r.district],['Category',r.category||'—'],['Total Emp',fmt(r.total)],['Present',fmt(r.present)],['Absent',fmt(r.absent)],['Leaves',fmt(r.leaves)],['Holidays',fmt(r.holidays)],['Working',fmt(r.working)],['Attendance',pctStr(r.pct)],['Absence',pctStr(r.absentPct)]].map(([k,v])=>'<div style="background:var(--surface-2);border-radius:7px;padding:10px;border:1.5px solid var(--border)"><div style="font-size:9px;font-weight:700;color:var(--text-2);text-transform:uppercase;margin-bottom:3px">'+esc(k)+'</div><div style="font-size:16px;font-weight:700;color:var(--text-1)">'+esc(v)+'</div></div>').join('')+'</div>'+
     '<p style="font-size:11px;margin-bottom:5px"><strong>DDO Code:</strong> <code style="background:var(--surface-2);padding:2px 5px;border-radius:3px">'+esc((r.office.match(/^[A-Z]+\d+/)||['—'])[0])+'</code></p>'+
     '<p style="font-size:11px;margin-bottom:11px;word-break:break-word"><strong>Full Name:</strong> '+esc(r.office)+'</p>'+
-    pctBar(r.pct)+'<div style="margin-top:8px">'+trafficLight(r.pct)+'</div>',
+    pctBar(r.pct)+'<div style="margin-top:8px">'+trafficLight(r.pct)+'</div>'+
+    '<div id="empDrillSection" style="margin-top:18px;padding-top:16px;border-top:1.5px solid var(--border)">'+
+      '<div style="font-size:11px;font-weight:700;color:var(--text-2);text-transform:uppercase;margin-bottom:8px">👤 Employee Detail <span style="font-weight:400;text-transform:none">— optional, requires the Employee Attendance file to have been uploaded for this date</span></div>'+
+      '<div id="empDrillBody" style="font-size:12px;color:var(--text-2)">⏳ Checking for employee-level data…</div>'+
+    '</div>',
   [r],safeFileName(r.office)+'_'+nowFile());
+
+  // Employee drill-down is fetched on-demand (not preloaded in bulk) since
+  // this table can hold 10,000+ rows/day — only ever query exactly what's needed.
+  const iso = ddmmyyyyToISO(r.date);
+  fetchEmployeesForOffice(r.office, iso).then(employees => {
+    const body = document.getElementById('empDrillBody');
+    if (!body) return; // modal was closed before the fetch finished
+
+    if (employees === null){
+      body.innerHTML = '<span style="color:var(--danger)">Could not check for employee data (connection or permissions issue).</span>';
+      return;
+    }
+    if (!employees.length){
+      body.innerHTML = '<span>No employee-level data uploaded for this office/date yet.</span>';
+      return;
+    }
+
+    // ── Mismatch check: compare against the OFFICIAL present count from
+    // the attendance table (r.present). This never changes what's
+    // displayed as official — it only flags a discrepancy for review.
+    const presentCount = employees.filter(e => e.status === 'Checked In' || e.status === 'Checked Out').length;
+    const mismatch = presentCount !== r.present;
+    const mismatchHTML = mismatch
+      ? '<div style="background:var(--warning-light);color:#92400e;border-radius:7px;padding:8px 12px;margin-bottom:10px;font-size:11px;font-weight:600">⚠️ Data mismatch: official Present count is '+r.present+', employee-level records show '+presentCount+'. Official number above is unaffected — this is a flag for review only.</div>'
+      : '<div style="background:var(--accent-light);color:#065f46;border-radius:7px;padding:8px 12px;margin-bottom:10px;font-size:11px;font-weight:600">✅ Employee-level count matches official Present number.</div>';
+
+    body.innerHTML = mismatchHTML +
+      '<input type="text" id="empSearchBox" placeholder="Search by name, designation, or status…" style="width:100%;border:1.5px solid var(--border);border-radius:7px;padding:7px 10px;font-size:12px;font-family:inherit;background:var(--surface-2);outline:none;margin-bottom:10px;color:var(--text-1)">'+
+      '<div style="max-height:300px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:11px" id="empDrillTable">'+
+      '<thead><tr style="background:#1e3a5f;color:#fff;position:sticky;top:0"><th style="padding:6px 9px;text-align:left">Name</th><th style="padding:6px 9px;text-align:left">Designation</th><th style="padding:6px 9px;text-align:left">Status</th><th style="padding:6px 9px;text-align:left">Check In</th><th style="padding:6px 9px;text-align:left">Check Out</th></tr></thead>'+
+      '<tbody>'+employees.map(e=>'<tr data-search="'+esc((e.employee_name+' '+(e.designation||'')+' '+(e.status||'')).toLowerCase())+'" style="border-bottom:1px solid var(--border)">'+
+        '<td style="padding:6px 9px">'+esc(e.employee_name)+'</td>'+
+        '<td style="padding:6px 9px">'+esc(e.designation||'—')+'</td>'+
+        '<td style="padding:6px 9px">'+esc(e.status||'—')+'</td>'+
+        '<td style="padding:6px 9px">'+esc(e.check_in_time||'—')+'</td>'+
+        '<td style="padding:6px 9px">'+esc(e.check_out_time||'—')+'</td></tr>').join('')+
+      '</tbody></table></div>';
+
+    document.getElementById('empSearchBox').addEventListener('input', function(){
+      const q = this.value.toLowerCase();
+      document.querySelectorAll('#empDrillTable tbody tr').forEach(tr => {
+        tr.style.display = tr.getAttribute('data-search').includes(q) ? '' : 'none';
+      });
+    });
+  });
 }
 function showHeatDrill(district,date){
   let rows=[...(allSheetData[date]||[]).filter(r=>r.district===district)];
