@@ -537,7 +537,15 @@ function processEmployeeFile(file){
   reader.onload = async function(evt){
     try {
       const wb = XLSX.read(evt.target.result, { type: 'binary', cellDates: false });
-      let allRows = [];
+      // Status priority when the same employee has multiple rows for the
+      // same day (e.g. a separate "Checked In" event and a separate
+      // "Checked Out" event) — pick the most complete/authoritative one
+      // as the merged row's status, while keeping BOTH times captured.
+      const STATUS_PRIORITY = ['Checked Out','Checked In','Casual Leave','Sick Leave','Earned Leave',
+        'Study Leave','Maternity Leave','Extra Ordinary Leave','Ex-Pakistan Leave','Bereavement leave',
+        'Winter Vocations LG','Holiday','Not Checked In'];
+
+      const merged = new Map(); // key -> consolidated row
       wb.SheetNames.forEach(sn => {
         const raw = XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: '' });
         raw.forEach(row => {
@@ -547,20 +555,35 @@ function processEmployeeFile(file){
           if (!office || !employeeName || !dateRaw) return; // skip incomplete rows
           const iso = parseEmployeeDateToISO(dateRaw);
           if (!iso) return; // unparseable date — skip rather than guess
-          allRows.push({
-            attendance_date: iso,
-            district: getDistrict(office),
-            office,
-            department: String(row['Department'] || '').trim() || null,
-            employee_name: employeeName,
-            designation: String(row['Job Title'] || '').trim() || null,
-            status: String(row['Status'] || '').trim() || null,
-            check_in_time: String(row['Check In'] || '').trim() || null,
-            check_out_time: String(row['Check Out'] || '').trim() || null,
-            uploaded_by: window.__currentUser.id,
-          });
+
+          const designation = String(row['Job Title'] || '').trim() || null;
+          const status = String(row['Status'] || '').trim() || null;
+          const checkIn = String(row['Check In'] || '').trim();
+          const checkOut = String(row['Check Out'] || '').trim();
+          const key = iso+'|'+office+'|'+employeeName+'|'+designation;
+
+          const existing = merged.get(key);
+          if (!existing) {
+            merged.set(key, {
+              attendance_date: iso, district: getDistrict(office), office,
+              department: String(row['Department'] || '').trim() || null,
+              employee_name: employeeName, designation, status,
+              check_in_time: checkIn && checkIn !== '-' ? checkIn : null,
+              check_out_time: checkOut && checkOut !== '-' ? checkOut : null,
+              uploaded_by: window.__currentUser.id,
+            });
+          } else {
+            // Merge: keep the higher-priority status, and fill in
+            // whichever check-in/check-out time isn't already captured
+            const curRank = STATUS_PRIORITY.indexOf(existing.status);
+            const newRank = STATUS_PRIORITY.indexOf(status);
+            if (newRank !== -1 && (curRank === -1 || newRank < curRank)) existing.status = status;
+            if (!existing.check_in_time && checkIn && checkIn !== '-') existing.check_in_time = checkIn;
+            if (!existing.check_out_time && checkOut && checkOut !== '-') existing.check_out_time = checkOut;
+          }
         });
       });
+      const allRows = Array.from(merged.values());
 
       if (!allRows.length){
         statusEl.textContent = '⚠️ No valid rows found. Check the file has Employee, Office, and Date columns.';
