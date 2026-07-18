@@ -518,11 +518,15 @@ function parseEmployeeDateToISO(s){
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
 
-document.getElementById('employeeUpload').addEventListener('change', function(e){
-  const file = e.target.files[0];
-  if (file) processEmployeeFile(file);
-  e.target.value = '';
-});
+(function attachEmployeeUploadListener(){
+  const el = document.getElementById('employeeUpload');
+  if (!el) { setTimeout(attachEmployeeUploadListener, 100); return; }
+  el.addEventListener('change', function(e){
+    const file = e.target.files[0];
+    if (file) processEmployeeFile(file);
+    e.target.value = '';
+  });
+})();
 
 function processEmployeeFile(file){
   const statusEl = document.getElementById('employeeUploadStatus');
