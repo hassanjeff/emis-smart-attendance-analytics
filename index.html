@@ -669,7 +669,7 @@ async function fetchEmployeesForOffice(office, isoDate){
   <h3>Upload Excel Workbook</h3>
   <p>Name each sheet with a date: <strong>16-04-2026</strong>. Multiple sheets enable trend analysis.</p>
   <label class="file-btn" for="excelUpload">
-    <span id="uploadBtnIcon">📎</span><span id="uploadBtnText">Choose Excel File (.xlsx)</span>
+    <span id="uploadBtnIcon">📎</span><span id="uploadBtnText">Choose File (.xlsx / .csv)</span>
     <div id="uploadSpinner"></div>
   </label>
 </div>
@@ -682,7 +682,7 @@ async function fetchEmployeesForOffice(office, isoDate){
     <span>🔄</span><span>Check for Data</span>
   </button>
 </div>
-<input type="file" id="excelUpload" accept=".xlsx,.xls" style="display:none">
+<input type="file" id="excelUpload" accept=".xlsx,.xls,.csv" style="display:none">
 <!-- Status row lives outside upload panel so panel never needs innerHTML rebuild -->
 <div id="uploadStatusRow">
   <div id="uploadStatusText"></div>
@@ -1194,7 +1194,7 @@ function getDistrict(office){
 document.getElementById('excelUpload').addEventListener('change',function(e){
   const file=e.target.files[0];this.value='';
   if(!file)return;
-  if(!/\.(xlsx|xls)$/i.test(file.name)){alert('Please upload an Excel file (.xlsx or .xls)');return;}
+  if(!/\.(xlsx|xls|csv)$/i.test(file.name)){alert('Please upload an Excel file (.xlsx, .xls) or a CSV file (.csv)');return;}
   if(typeof XLSX==='undefined'){alert('Excel library still loading. Wait a moment and try again.\nIf this repeats, press Ctrl+F5 to hard refresh.');return;}
   processFile(file);
 });
@@ -1204,7 +1204,7 @@ function handleDrop(e){
 }
 function setUploading(on){
   const t=document.getElementById('uploadBtnText'),sp=document.getElementById('uploadSpinner'),ic=document.getElementById('uploadBtnIcon');
-  if(t)t.textContent=on?'Processing...':'Choose Excel File (.xlsx)';
+  if(t)t.textContent=on?'Processing...':'Choose File (.xlsx / .csv)';
   if(sp)sp.style.display=on?'block':'none';
   if(ic)ic.style.display=on?'none':'inline';
 }
@@ -1215,9 +1215,31 @@ function processFile(file){
     try{
       allSheetData={};filteredData=[];tableData=[];destroyAllCharts();
       const wb=XLSX.read(ev.target.result,{type:'array'});
-      wb.SheetNames.forEach(sn=>{
+      const isCsv=/\.csv$/i.test(file.name);
+      let sheetPlan;
+      if(isCsv){
+        // CSV has no equivalent of "sheet name" to encode a date — SheetJS
+        // always calls it just "Sheet1". Since the DDO summary file has no
+        // per-row date column either, the date can't be inferred from the
+        // file's contents, so we ask once, with a sensible default.
+        const fnMatch=file.name.match(/(\d{1,2})[-_](\d{1,2})[-_](\d{4})/);
+        const todayStr=(()=>{const d=new Date();return String(d.getDate()).padStart(2,'0')+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+d.getFullYear();})();
+        const suggested=fnMatch?(fnMatch[1].padStart(2,'0')+'-'+fnMatch[2].padStart(2,'0')+'-'+fnMatch[3]):todayStr;
+        const input=prompt('CSV files don\'t carry a date the way Excel sheet tabs do.\nWhat date is this attendance data for? (format: DD-MM-YYYY)',suggested);
+        if(input===null){setUploading(false);return;} // user cancelled
+        const m=input.trim().match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+        if(!m){alert('Date must be in DD-MM-YYYY format, e.g. 17-07-2026. Upload cancelled — please try again.');setUploading(false);return;}
+        const dd=parseInt(m[1],10),mm=parseInt(m[2],10),yyyy=parseInt(m[3],10);
+        if(dd<1||dd>31||mm<1||mm>12||yyyy<2000||yyyy>2100){alert('That doesn\'t look like a valid date. Upload cancelled — please try again.');setUploading(false);return;}
+        const dateKey=String(dd).padStart(2,'0')+'-'+String(mm).padStart(2,'0')+'-'+yyyy;
+        sheetPlan=[{dateKey,sheetKey:wb.SheetNames[0]}];
+      } else {
+        sheetPlan=wb.SheetNames.map(sn=>({dateKey:sn,sheetKey:sn}));
+      }
+      sheetPlan.forEach(({dateKey,sheetKey})=>{
+        const sn=dateKey; // keep existing variable name below unchanged for minimal diff
         try{
-          const raw=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:null});
+          const raw=XLSX.utils.sheet_to_json(wb.Sheets[sheetKey],{defval:null});
           if(!raw.length)return;
           const rows=raw.map(r=>{
             const office=sv(r['Office']||r['Offices']||'').trim();
