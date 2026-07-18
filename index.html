@@ -1585,10 +1585,18 @@ function renderDonutChart(){ // ★ #7 Holiday removed — only Present/Absent/L
   charts['chartDonut']=new Chart(document.getElementById('chartDonut').getContext('2d'),{type:'doughnut',
     data:{labels:['Present','Absent','Leave'],datasets:[{data:[p,a,l],backgroundColor:['#059669','#dc2626','#d97706'],borderWidth:2,hoverOffset:8}]},
     options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
-      plugins:{legend:{position:'right',labels:{color:cT()}},
+      onClick:(e,els)=>{if(els.length)showStatusDrill(['Present','Absent','Leave'][els[0].index]);},
+      onHover:(e,els)=>{e.native.target.style.cursor=els.length?'pointer':'default';},
+      plugins:{legend:{position:'right',labels:{color:cT()},onClick:(e,item)=>showStatusDrill(item.text)},
         datalabels:{display:true,color:'#fff',font:{size:10,weight:'bold'},formatter:(v,ctx)=>{const tot=ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);return tot>0?((v/tot)*100).toFixed(0)+'%':'';}},
-        tooltip:{callbacks:{label:c=>c.label+': '+fmt(c.parsed)+' ('+(totW>0?pctStr(c.parsed/totW):'—')+')'}}}}
+        tooltip:{callbacks:{label:c=>c.label+': '+fmt(c.parsed)+' ('+(totW>0?pctStr(c.parsed/totW):'—')+') — click for full list'}}}}
   });
+}
+// Full DDO list behind a Present/Absent/Leave donut slice, sorted by that metric.
+function showStatusDrill(status){
+  const key=status==='Present'?'present':status==='Absent'?'absent':'leaves';
+  const rows=[...filteredData].sort((a,b)=>b[key]-a[key]);
+  showModal('All DDOs — '+status+' Breakdown ('+rows.length+')',drillTableHTML(rows),rows,safeFileName(status)+'_Breakdown_'+nowFile());
 }
 
 function renderEmpBarChart(){ // ★ #1 Replaces Top 15 Institutions chart
@@ -1614,7 +1622,9 @@ function renderEmpPieChart(){
   charts['chartEmpPie']=new Chart(document.getElementById('chartEmpPie').getContext('2d'),{type:'pie',
     data:{labels:agg.map(d=>d.district),datasets:[{data:agg.map(d=>d.total),backgroundColor:agg.map(d=>DISTRICT_COLORS[d.district]||'#888'),borderWidth:2}]},
     options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{position:'right',labels:{color:cT()}},datalabels:{display:false},tooltip:{callbacks:{label:c=>c.label+': '+fmt(c.parsed)+' employees'}}}}
+      onClick:(e,els)=>{if(els.length)showDistrictDrill(agg[els[0].index].district);},
+      onHover:(e,els)=>{e.native.target.style.cursor=els.length?'pointer':'default';},
+      plugins:{legend:{position:'right',labels:{color:cT()},onClick:(e,item)=>showDistrictDrill(agg[item.index].district)},datalabels:{display:false},tooltip:{callbacks:{label:c=>c.label+': '+fmt(c.parsed)+' employees — click for DDO breakdown'}}}}
   });
 }
 
