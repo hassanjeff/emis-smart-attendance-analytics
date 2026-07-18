@@ -1601,7 +1601,9 @@ function renderEmpBarChart(){ // ★ #1 Replaces Top 15 Institutions chart
       datalabels:dlTop(v=>fmt(v)) // ★ #8 values at bar tips
     }]},
     options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},datalabels:{},tooltip:{callbacks:{label:c=>fmt(c.parsed.y)+' employees'}}},
+      onClick:(e,els)=>{if(els.length)showDistrictDrill(agg[els[0].index].district);},
+      onHover:(e,els)=>{e.native.target.style.cursor=els.length?'pointer':'default';},
+      plugins:{legend:{display:false},datalabels:{},tooltip:{callbacks:{label:c=>fmt(c.parsed.y)+' employees — click bar for DDO breakdown'}}},
       scales:{y:{beginAtZero:true,ticks:{color:cT()},grid:{color:cG()}},x:{grid:{display:false},ticks:{color:cT()}}}}
   });
 }
