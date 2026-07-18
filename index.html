@@ -1161,6 +1161,7 @@ const COLLEGE_KEYS=['college of education','college'];
 const SCHOOL_KEYS=['school','h/s','h/school','primary school','middle school','elementary','govt. boys','govt. girls','govt boys','govt girls'];
 const OFFICE_KEYS=['director','directorate','office','engineer','board','center','navttc','planning','examination'];
 const DISTRICT_COLORS={Astore:'#1a56db',Ghizer:'#059669',Diamer:'#d97706',Hunza:'#7c3aed',Gilgit:'#0891b2',Skardu:'#dc2626',Shigar:'#db2777',Nagar:'#ea580c',Ghanche:'#65a30d',Kharmang:'#0d9488'};
+const DISTRICT_ABBR={Astore:'AST',Ghizer:'GHZ',Diamer:'DMR',Hunza:'HZA',Gilgit:'GIL',Skardu:'SKD',Shigar:'SHG',Nagar:'NGR',Ghanche:'GHE',Kharmang:'KHM'};
 const CHART_PALETTE=['#1a56db','#059669','#d97706','#7c3aed','#dc2626','#0891b2','#db2777','#ea580c','#65a30d','#0d9488'];
 const TARGET_PCT=87;
 
@@ -1624,7 +1625,10 @@ function renderEmpPieChart(){
     options:{responsive:true,maintainAspectRatio:false,
       onClick:(e,els)=>{if(els.length)showDistrictDrill(agg[els[0].index].district);},
       onHover:(e,els)=>{e.native.target.style.cursor=els.length?'pointer':'default';},
-      plugins:{legend:{position:'right',labels:{color:cT()},onClick:(e,item)=>showDistrictDrill(agg[item.index].district)},datalabels:{display:false},tooltip:{callbacks:{label:c=>c.label+': '+fmt(c.parsed)+' employees — click for DDO breakdown'}}}}
+      plugins:{legend:{position:'right',labels:{color:cT()},onClick:(e,item)=>showDistrictDrill(agg[item.index].district)},
+        datalabels:{display:'auto',anchor:'center',align:'center',color:'#fff',font:{size:10,weight:'bold'},textAlign:'center',
+          formatter:(v,ctx)=>[DISTRICT_ABBR[ctx.chart.data.labels[ctx.dataIndex]]||ctx.chart.data.labels[ctx.dataIndex],fmt(v)]},
+        tooltip:{callbacks:{label:c=>c.label+': '+fmt(c.parsed)+' employees — click for DDO breakdown'}}}}
   });
 }
 
